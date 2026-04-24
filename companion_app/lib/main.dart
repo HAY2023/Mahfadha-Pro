@@ -47,14 +47,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _port = SerialPort(portName);
       if (_port!.openReadWrite()) {
         setState(() {
-          _status = "Connected to $portName securely";
+          _status = "Connected to $portName (Awaiting Biometric Unlock)";
         });
         
-        // Listen for incoming responses (Optional but recommended for full implementation)
-        // final reader = SerialPortReader(_port!);
-        // reader.stream.listen((data) {
-        //   print('Received: ${utf8.decode(data)}');
-        // });
+        final reader = SerialPortReader(_port!);
+        reader.stream.listen((data) {
+          try {
+            String message = utf8.decode(data).trim();
+            if (message.isNotEmpty) {
+              final json = jsonDecode(message);
+              if (json['status'] == 'event') {
+                if (json['message'] == 'BIOMETRIC_UNLOCKED') {
+                  setState(() {
+                    _status = "Connected & UNLOCKED 🟢";
+                  });
+                } else if (json['message'] == 'BIOMETRIC_LOCKED') {
+                  setState(() {
+                    _status = "Connected & LOCKED 🔴 (Scan Finger)";
+                  });
+                }
+              } else if (json['status'] == 'error') {
+                 print("Error from device: ${json['message']}");
+                 // Could show a snackbar here using a global key, but print is fine for now
+              }
+            }
+          } catch (e) {
+            // Ignore non-json debug messages
+            print("Serial Data: ${utf8.decode(data)}");
+          }
+        });
         
       } else {
         setState(() {
