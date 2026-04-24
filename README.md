@@ -1,37 +1,61 @@
-# Mahfadha Pro - Military Grade Hardware Password Manager
+# 🛡️ Mahfadha Pro
 
-This repository contains the professional, commercial-grade implementation of the "Mahfadha Pro" system, transitioning from a WiFi-based PoC to a 100% offline, secure, military-grade architecture.
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
+![Version](https://img.shields.io/badge/Version-1.0.0--Ghost-orange.svg)
+
+**Mahfadha Pro** is a next-generation, military-grade hardware password manager and Authenticator (TOTP) built for zero-trust environments. Designed in 2026, it operates entirely offline, using advanced cryptographic co-processors and biometric authentication to secure your digital life.
+
+## 🌌 Project Philosophy
+1. **Zero Persistence:** Sensitive data (passwords, encryption keys, decrypted payloads) is **never** stored on the host PC. Data exists momentarily in RAM during transfer and is wiped immediately.
+2. **Ghost Mode (Stealth Serial):** The hardware device (ESP32-S3) is invisible to standard serial monitors. It remains silent and ignores all incoming traffic until a mathematically complex 64-character SHA-256 Handshake Token is provided.
+3. **Hardware-Enforced Security:** Uses the ATECC608A Secure Element to handle AES-256-GCM encryption. The master key never touches the ESP32's volatile or non-volatile memory.
+
+---
 
 ## 📁 Repository Structure
 
-### 1. `esp32_firmware/` (ESP32-S3 C++ Code)
-The completely rewritten firmware for the ESP32-S3 hardware module.
-**Key Upgrades:**
-- **Zero Radio / 100% Offline:** All WiFi, WebServer, and NTP functionalities have been completely removed to ensure zero wireless attack surface.
-- **AES-256 CBC Encryption:** Uses `mbedtls` to encrypt all sensitive data before saving it to the ESP32's non-volatile memory (NVM via `Preferences`). The keys/passwords exist in plaintext *only* in the volatile RAM when needed for UI or USB typing.
-- **Dynamic Memory Allocation:** Removed hardcoded arrays. Now dynamically stores up to 100 accounts using `std::vector`.
-- **Hardware RTC:** Integrated `RTClib` (DS3231) for maintaining precise time for TOTP generation without internet access.
-- **Secure USB Serial Protocol:** Replaced the WiFi portal with a JSON-based command protocol over USB Serial.
+### 🔌 `/firmware` (ESP32-S3 / C++)
+The core brain of the device.
+* **Biometrics:** GROW R503 Fingerprint sensor integration.
+* **Crypto:** ATECC608A (CryptoAuthLib) & PBKDF2 Key Derivation.
+* **Navigation:** Interrupt-driven Rotary Encoder (Jog Dial).
+* **Self-Destruct:** Formats all NVM partitions and locks ATECC608A if brute-forced (15 failed attempts).
 
-#### How to build (PlatformIO):
-1. Open the `esp32_firmware` folder in VSCode with the PlatformIO extension.
-2. Connect your ESP32-S3.
-3. Click "Build" and "Upload".
+### 🖥️ `/app` (Flutter / Dart)
+The companion application for Windows/macOS/Linux.
+* **Frosted Glass UI:** A stunning, modern, and immersive 2026 aesthetic.
+* **Migration Tool:** Encrypts and imports CSV files from Bitwarden and Chrome.
+* **Zero-Knowledge Backup:** Exports/Imports `.mahfadha` encrypted blobs.
 
-### 2. `companion_app/` (Cross-Platform Flutter App)
-The structural codebase for the PC/Mobile Companion App built using **Flutter**.
-**Key Features:**
-- **Cross-Platform Compatibility:** Runs on Windows, macOS, Linux natively. Can easily be ported to Android/iOS (using mobile USB OTG packages) later with the same Dart codebase.
-- **Serial Port Communication:** Uses `flutter_libserialport` to scan for connected Mahfadha Pro devices and establish a direct wired connection.
-- **Command Center:** Features a dynamic UI to send JSON commands over USB to Add Accounts, Delete Accounts, and Sync the ESP32's Hardware RTC time directly from the host PC.
+### 🌉 `/cli-bridge` (Python)
+The secure middleware.
+* Acts as the exclusive translator between the Flutter App and the Hardware.
+* Manages the "Secret Handshake" protocol.
 
-#### How to run:
-1. Install [Flutter SDK](https://docs.flutter.dev/get-started/install).
-2. Navigate to `companion_app/` in your terminal.
-3. Run `flutter pub get`.
-4. Run `flutter run -d windows` (or macos/linux depending on your OS).
+---
 
-## 🔒 Security Posture
-*   **Air-gapped by default:** The device has no capability to connect to the internet.
-*   **Zero-Trust Storage:** If the ESP32 flash chip is desoldered or dumped, the attacker only sees AES-256 encrypted blobs.
-*   **Direct Hardware Typing:** Passwords are never sent back to the PC companion app. They are typed directly into the OS as a standard USB Keyboard (`USBHIDKeyboard`), defeating software keyloggers.
+## 🚀 Getting Started
+
+### 1. Flash the Firmware
+1. Navigate to `/firmware`.
+2. Open with VS Code + PlatformIO.
+3. Build and upload to your ESP32-S3.
+
+### 2. Run the Secure Bridge
+1. Navigate to `/cli-bridge`.
+2. Install requirements (if any).
+3. Run the bridge:
+   ```bash
+   python mahfadha_bridge.py --connect --port COM3 --session-auth
+   ```
+
+### 3. Launch the App
+1. Navigate to `/app`.
+2. Run `flutter pub get`.
+3. Launch desktop app: `flutter run -d windows` (or macos/linux).
+
+---
+
+## ⚠️ Security Warning
+Do not lose your Master PIN or your hardware device. Because Mahfadha Pro uses the ATECC608A Secure Element, **there is absolutely no backdoor**. If the hardware is destroyed and no `.mahfadha` backup exists, your data is mathematically unrecoverable.

@@ -1,0 +1,21 @@
+# Firmware
+firmware/.pio/
+firmware/.vscode/
+firmware/build/
+
+# App
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/ios/Pods/
+app/.idea/
+
+# CLI Bridge
+cli-bridge/__pycache__/
+cli-bridge/venv/
+cli-bridge/.env
+
+# General
+.DS_Store
+*.log

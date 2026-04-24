@@ -72,6 +72,14 @@ uint8_t hardwareSalt[32] = {0x01, 0x02, 0x03}; // In production, read from ATECC
 String pinEntryBuffer = "";
 const String MASTER_PIN = "123456"; // Hash this in production!
 
+// Ghost Mode Variables
+bool isGhostModeActive = true;
+int serialFailCount = 0;
+unsigned long serialLockoutTime = 0;
+const unsigned long SERIAL_LOCKOUT_DURATION = 10 * 60 * 1000; // 10 minutes
+// Example token for 'password123' + 'MAHFADHA_GHOST_PROTOCOL_V1_2026'
+const String EXPECTED_TOKEN = "c650bc7da0cc3565012f2e519c961e61884485eb3528b6d39d911b329431de3f";
+
 // ==========================================
 // FUNCTION PROTOTYPES
 // ==========================================
@@ -433,18 +441,46 @@ void handleEncoderAndFingerprint() {
 }
 
 // ==========================================
-// USB SERIAL COMMUNICATION
+// USB SERIAL COMMUNICATION (GHOST MODE)
 // ==========================================
 void handleSerialCommands() {
     if (Serial.available()) {
         String payload = Serial.readStringUntil('\n');
+        
+        // Check Serial Lockout
+        if (serialFailCount >= 3) {
+            if (millis() - serialLockoutTime < SERIAL_LOCKOUT_DURATION) {
+                return; // Silently ignore (Ghost Mode)
+            } else {
+                serialFailCount = 0; // Reset after 10 minutes
+            }
+        }
+
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, payload);
-        if (err) return;
+        if (err) return; // Ignore malformed JSON silently
         
         String command = doc["cmd"].as<String>();
         
-        if (command == "add_account" || command == "delete_account" || command == "list_accounts") {
+        // 1. Ghost Mode Handshake Check
+        if (isGhostModeActive) {
+            if (command == "handshake") {
+                String token = doc["token"].as<String>();
+                if (token == EXPECTED_TOKEN && token.length() == 64) {
+                    isGhostModeActive = false;
+                    serialFailCount = 0;
+                    Serial.println("{\"status\":\"success\",\"message\":\"Bridge established\"}");
+                } else {
+                    serialFailCount++;
+                    if (serialFailCount >= 3) serialLockoutTime = millis();
+                    Serial.println("{\"status\":\"error\",\"message\":\"Handshake failed\"}");
+                }
+            }
+            return; // Ignore ALL other commands if Ghost Mode is active
+        }
+
+        // Commands that require device to be Unlocked via Biometrics/PIN
+        if (command == "add_account" || command == "delete_account" || command == "list_accounts" || command == "export_backup") {
             if (!isUnlocked) {
                 Serial.println("{\"status\":\"error\",\"message\":\"Device is locked.\"}");
                 return;
@@ -452,6 +488,7 @@ void handleSerialCommands() {
             lastActivityTime = millis(); 
         }
 
+        // Handle specific commands
         if (command == "sync_time") {
             rtc.adjust(DateTime(doc["time"].as<uint32_t>()));
             Serial.println("{\"status\":\"success\",\"message\":\"Time synced\"}");
