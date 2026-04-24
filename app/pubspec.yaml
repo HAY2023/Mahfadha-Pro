@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_libserialport: ^0.3.0
+  file_picker: ^8.0.0
+  csv: ^6.0.0
 
 dev_dependencies:
   flutter_test:

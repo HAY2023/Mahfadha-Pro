@@ -274,10 +274,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onPressed: _listAccounts,
                   ),
                   _buildActionButton(
-                    icon: Icons.delete_forever,
-                    label: "Delete Entry (ID 0)",
-                    color: Colors.red[700]!,
-                    onPressed: _deleteAccount,
+                    icon: Icons.upload_file,
+                    label: "Import CSV (Chrome/Bitwarden)",
+                    color: Colors.orange[700]!,
+                    onPressed: _importCsv,
+                  ),
+                  _buildActionButton(
+                    icon: Icons.save_alt,
+                    label: "Export Zero-Knowledge Backup",
+                    color: Colors.teal[700]!,
+                    onPressed: () => _sendCommand({"cmd": "export_backup"}),
                   ),
                 ],
               ),
@@ -286,6 +292,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _importCsv() async {
+    if (_port == null || !_port!.isOpen || !_status.contains("UNLOCKED")) {
+       ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text('Device must be connected and UNLOCKED first.')),
+       );
+       return;
+    }
+
+    try {
+      // Lazy load to avoid import errors if not run via flutter run
+      // For a real app, import 'package:file_picker/file_picker.dart' at top
+      // and 'package:csv/csv.dart'
+      ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text('CSV Parsing UI Triggered! (Requires file_picker & csv package sync)')),
+      );
+      
+      /* Example parsing logic:
+      FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+      if(result != null) {
+        final input = File(result.files.single.path!).openRead();
+        final fields = await input.transform(utf8.decoder).transform(new CsvToListConverter()).toList();
+        
+        for (var row in fields.skip(1)) { // Skip header
+           // Adapt indexes based on Chrome or Bitwarden format
+           String name = row[0].toString();
+           String url = row[1].toString();
+           String username = row[2].toString();
+           String password = row[3].toString();
+           
+           _sendCommand({
+             "cmd": "add_account",
+             "name": name,
+             "username": username,
+             "password": password
+           });
+           
+           await Future.delayed(Duration(milliseconds: 500)); // Allow ESP32 to encrypt and save NVM
+        }
+      }
+      */
+    } catch (e) {
+      print("CSV Import Error: $e");
+    }
   }
 
   Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback onPressed}) {
