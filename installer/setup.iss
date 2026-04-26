@@ -15,12 +15,11 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\installer-output
 OutputBaseFilename=Mahfadha-Pro-Setup
-SetupIconFile=icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
-UninstallDisplayIcon={app}\{#MyAppExeName}
+
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
