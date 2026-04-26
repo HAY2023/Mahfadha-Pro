@@ -1,28 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Mahfadha Pro "Mars" Design System
-/// Dark space-grey + cyan neon + glassmorphism
+/// Mahfadha Pro — نظام التصميم المريخي الفخم
+/// كحلي فضائي داكن + نيون سيان + زجاج لامع (Glassmorphism)
 class MarsTheme {
   MarsTheme._();
 
-  // ── Core Palette ────────────────────────────────────────────────────
-  static const Color background = Color(0xFF0B0E17);
+  // ── الألوان الأساسية ──────────────────────────────────────────────
+  static const Color spaceNavy = Color(0xFF0A0E14);
+  static const Color deepSpace = Color(0xFF0D1117);
   static const Color surface = Color(0xFF131829);
-  static const Color surfaceLight = Color(0xFF1A2035);
+  static const Color surfaceLight = Color(0xFF1A2235);
   static const Color cardGlass = Color(0x2A1E2A4A);
-  static const Color borderGlow = Color(0x2663DCFF);
-  static const Color cyan = Color(0xFF63DCFF);
+
+  // ── ألوان النيون ──────────────────────────────────────────────────
+  static const Color cyanNeon = Color(0xFF00FFFF);
   static const Color cyanDim = Color(0xFF2AA5C8);
+  static const Color cyanGlow = Color(0xFF63DCFF);
   static const Color accent = Color(0xFF7C5CFC);
+  static const Color borderGlow = Color(0x2663DCFF);
+
+  // ── ألوان الحالة ──────────────────────────────────────────────────
   static const Color success = Color(0xFF34D399);
   static const Color error = Color(0xFFF87171);
   static const Color warning = Color(0xFFFBBF24);
+
+  // ── ألوان النص ────────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFFE2E8F0);
   static const Color textSecondary = Color(0xFF94A3B8);
   static const Color textMuted = Color(0xFF64748B);
 
-  // ── Gradients ───────────────────────────────────────────────────────
+  // ── التدرجات ──────────────────────────────────────────────────────
   static const LinearGradient cyanGradient = LinearGradient(
     colors: [Color(0xFF0891B2), Color(0xFF3B82F6)],
     begin: Alignment.topLeft,
@@ -36,12 +44,17 @@ class MarsTheme {
   );
 
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0B0E17), Color(0xFF0F172A), Color(0xFF0B0E17)],
+    colors: [Color(0xFF0A0E14), Color(0xFF0F172A), Color(0xFF0A0E14)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
-  // ── Glass Decoration ────────────────────────────────────────────────
+  static const RadialGradient marsRadial = RadialGradient(
+    colors: [Color(0xFF1A2235), Color(0xFF0A0E14)],
+    radius: 1.5,
+  );
+
+  // ── تزيين البطاقة الزجاجية ─────────────────────────────────────────
   static BoxDecoration glassCard({double borderRadius = 20}) {
     return BoxDecoration(
       gradient: cardGradient,
@@ -49,12 +62,12 @@ class MarsTheme {
       border: Border.all(color: borderGlow, width: 1),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha: 0.4),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),
         BoxShadow(
-          color: cyan.withOpacity(0.04),
+          color: cyanNeon.withValues(alpha: 0.04),
           blurRadius: 40,
           spreadRadius: -4,
         ),
@@ -62,49 +75,84 @@ class MarsTheme {
     );
   }
 
-  // ── ThemeData ───────────────────────────────────────────────────────
+  // ── تزيين بوابة الاتصال الزجاجية ──────────────────────────────────
+  static BoxDecoration gateGlassCard({double borderRadius = 24}) {
+    return BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(borderRadius),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      boxShadow: [
+        BoxShadow(
+          color: cyanNeon.withValues(alpha: 0.06),
+          blurRadius: 60,
+          spreadRadius: -10,
+        ),
+      ],
+    );
+  }
+
+  // ── ThemeData ──────────────────────────────────────────────────────
   static ThemeData get darkTheme {
-    final textTheme = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+    final cairoText = GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme);
 
     return ThemeData.dark().copyWith(
-      scaffoldBackgroundColor: background,
-      primaryColor: cyan,
+      scaffoldBackgroundColor: spaceNavy,
+      primaryColor: cyanNeon,
       colorScheme: const ColorScheme.dark(
-        primary: cyan,
+        primary: cyanNeon,
         secondary: accent,
         surface: surface,
         error: error,
-        onPrimary: Color(0xFF0B0E17),
+        onPrimary: Color(0xFF0A0E14),
         onSecondary: Colors.white,
         onSurface: textPrimary,
         onError: Colors.white,
       ),
-      textTheme: textTheme.copyWith(
-        headlineLarge: textTheme.headlineLarge?.copyWith(
+      textTheme: cairoText.copyWith(
+        displayLarge: GoogleFonts.cairo(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+        headlineLarge: GoogleFonts.cairo(
           color: textPrimary,
+          fontSize: 28,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
         ),
-        headlineMedium: textTheme.headlineMedium?.copyWith(
+        headlineMedium: GoogleFonts.cairo(
           color: textPrimary,
+          fontSize: 22,
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: textTheme.bodyLarge?.copyWith(color: textSecondary),
-        bodyMedium: textTheme.bodyMedium?.copyWith(color: textSecondary),
-        labelLarge: textTheme.labelLarge?.copyWith(
+        titleLarge: GoogleFonts.cairo(
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
+          color: cyanNeon,
+        ),
+        bodyLarge: GoogleFonts.cairo(
+          fontSize: 16,
+          color: Colors.white70,
+        ),
+        bodyMedium: GoogleFonts.cairo(
+          color: textSecondary,
+          fontSize: 14,
+        ),
+        labelLarge: GoogleFonts.cairo(
           color: textPrimary,
           fontWeight: FontWeight.w600,
+          fontSize: 14,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: cyan,
-          foregroundColor: background,
+          backgroundColor: cyanNeon,
+          foregroundColor: spaceNavy,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.cairo(
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -113,8 +161,8 @@ class MarsTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: textSecondary,
-          side: BorderSide(color: borderGlow),
+          foregroundColor: cyanNeon,
+          side: const BorderSide(color: cyanNeon, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -124,7 +172,7 @@ class MarsTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.cairo(
           color: textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w600,
