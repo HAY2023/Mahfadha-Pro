@@ -23,32 +23,61 @@ jobs:
         run: |
           cd cli-bridge
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          # Add any other requirements here (e.g., pyserial, cryptography)
+          pip install pyinstaller pyserial
           pyinstaller --onefile --name mahfadha_bridge mahfadha_bridge.py
         
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.22.0'
           channel: 'stable'
           
       - name: Build Flutter App
         run: |
           cd app
-          # Ensure windows support is enabled
           flutter create --platforms windows .
           flutter pub get
           flutter build windows --release
 
       - name: Prepare Release Package
+        shell: pwsh
         run: |
-          mkdir Mahfadha-Pro-Release
-          # Copy Flutter App
-          cp -r app/build/windows/x64/runner/Release/* Mahfadha-Pro-Release/
-          # Copy Python CLI Bridge
-          cp cli-bridge/dist/mahfadha_bridge.exe Mahfadha-Pro-Release/
-          # Compress to Zip
-          Compress-Archive -Path Mahfadha-Pro-Release\* -DestinationPath Mahfadha-Pro-Windows.zip
+          New-Item -ItemType Directory -Force "Mahfadha-Pro-Release"
+
+          # Find the Release directory
+          $releaseDir = $null
+          $x64Path = "app\build\windows\x64\runner\Release"
+          $legacyPath = "app\build\windows\runner\Release"
+
+          if (Test-Path $x64Path) {
+            $releaseDir = $x64Path
+          } elseif (Test-Path $legacyPath) {
+            $releaseDir = $legacyPath
+          } else {
+            Write-Host "ERROR: Could not find Flutter release directory!"
+            exit 1
+          }
+
+          Write-Host "Found Flutter release at: $releaseDir"
+          Copy-Item "$releaseDir\*" "Mahfadha-Pro-Release\" -Recurse
+
+          # Verify/rename exe
+          $exeName = "mahfadha_companion.exe"
+          if (-not (Test-Path "Mahfadha-Pro-Release\$exeName")) {
+            $exeFiles = Get-ChildItem "Mahfadha-Pro-Release\*.exe"
+            if ($exeFiles.Count -gt 0) {
+              $actualExe = $exeFiles[0].Name
+              Write-Host "Renaming $actualExe -> $exeName"
+              Rename-Item "Mahfadha-Pro-Release\$actualExe" $exeName
+            }
+          }
+
+          # Copy CLI bridge
+          Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "Mahfadha-Pro-Release\"
+          
+          # Create zip
+          Compress-Archive -Path "Mahfadha-Pro-Release\*" -DestinationPath "Mahfadha-Pro-Windows.zip"
+          Write-Host "Release package created!"
 
       - name: Release
         uses: softprops/action-gh-release@v2

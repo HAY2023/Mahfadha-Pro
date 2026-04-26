@@ -49,18 +49,53 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "installer\flutter-release"
-          # Find the Flutter release output
-          $exeFile = Get-ChildItem -Path "app\build\windows" -Recurse -Filter "mahfadha_companion.exe" | Select-Object -First 1
-          if ($exeFile) {
-            Copy-Item "$($exeFile.Directory.FullName)\*" "installer\flutter-release\" -Recurse
+
+          # Find the Release directory containing the built exe
+          # Flutter outputs to: app\build\windows\x64\runner\Release\ (or without x64)
+          $releaseDir = $null
+
+          # Try x64 path first (newer Flutter versions)
+          $x64Path = "app\build\windows\x64\runner\Release"
+          if (Test-Path $x64Path) {
+            $releaseDir = $x64Path
           } else {
-            # Fallback: find any .exe in the runner Release folder
-            $releaseDir = Get-ChildItem -Path "app\build\windows" -Recurse -Directory -Filter "Release" | Select-Object -First 1
-            if ($releaseDir) {
-              Copy-Item "$($releaseDir.FullName)\*" "installer\flutter-release\" -Recurse
+            # Fallback to non-x64 path
+            $legacyPath = "app\build\windows\runner\Release"
+            if (Test-Path $legacyPath) {
+              $releaseDir = $legacyPath
             }
           }
+
+          if ($releaseDir) {
+            Write-Host "Found Flutter release at: $releaseDir"
+            # List contents for debugging
+            Get-ChildItem $releaseDir | ForEach-Object { Write-Host "  -> $($_.Name)" }
+            Copy-Item "$releaseDir\*" "installer\flutter-release\" -Recurse
+          } else {
+            Write-Host "ERROR: Could not find Flutter release directory!"
+            Write-Host "Directory tree under app\build\windows:"
+            Get-ChildItem -Path "app\build\windows" -Recurse -Directory | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+
+          # Verify the main exe exists in the copied files
+          $exeName = "mahfadha_companion.exe"
+          if (-not (Test-Path "installer\flutter-release\$exeName")) {
+            Write-Host "WARNING: $exeName not found. Looking for available exe files..."
+            $exeFiles = Get-ChildItem "installer\flutter-release\*.exe"
+            if ($exeFiles.Count -gt 0) {
+              $actualExe = $exeFiles[0].Name
+              Write-Host "Found exe: $actualExe — renaming to $exeName"
+              Rename-Item "installer\flutter-release\$actualExe" $exeName
+            } else {
+              Write-Host "ERROR: No exe files found in flutter-release!"
+              exit 1
+            }
+          }
+
+          Write-Host "Copying CLI bridge..."
           Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "installer\"
+          Write-Host "Installer files ready!"
 
       - name: Build Single Installer EXE with Inno Setup
         run: |
