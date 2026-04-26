@@ -37,6 +37,17 @@ The secure middleware.
 
 ## 🚀 Getting Started
 
+### 📥 Download the Pre-built `.exe` (Windows)
+The easiest way to get started on Windows is to download the pre-built binaries:
+1. Go to the [Releases](../../releases) page on GitHub.
+2. Download the `Mahfadha-Pro-Windows.zip` file from the latest release.
+3. Extract the ZIP file.
+4. Run `app.exe` (or `mahfadha_bridge.exe` via command line).
+
+> **Note:** The executables are automatically built using GitHub Actions whenever a new tag is released.
+
+---
+
 ### 1. Flash the Firmware
 1. Navigate to `/firmware`.
 2. Open with VS Code + PlatformIO.
