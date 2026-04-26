@@ -58,13 +58,30 @@ struct Account {
 
 std::vector<Account> accounts;
 
-enum MenuScreen { SCREEN_LOCKED, SCREEN_PIN_ENTRY, SCREEN_MAIN, SCREEN_PASSWORDS, SCREEN_PASSWORD_ACTIONS, SCREEN_SETTINGS };
-MenuScreen currentScreen = SCREEN_LOCKED;
+enum MenuScreen {
+    SCREEN_BOOT,
+    SCREEN_SETUP_WAITING,
+    SCREEN_SETUP_ENROLL,
+    SCREEN_SETUP_ENROLL_OK,
+    SCREEN_LOCKED,
+    SCREEN_PIN_ENTRY,
+    SCREEN_MAIN,
+    SCREEN_PASSWORDS,
+    SCREEN_PASSWORD_ACTIONS,
+    SCREEN_SETTINGS,
+    SCREEN_VERIFY_IDENTITY,
+    SCREEN_SEED_VAULT,
+    SCREEN_FIDO2
+};
+MenuScreen currentScreen = SCREEN_BOOT;
+MenuScreen returnAfterVerify = SCREEN_MAIN;
 int selectedIndex = 0;
 int menuScrollOffset = 0;
 long lastEncoderPosition = 0;
 bool isUnlocked = false;
 int failedAttempts = 0;
+bool hasMasterFingerprint = false;
+bool setupComplete = false;
 
 // Security variables
 uint8_t derivedSessionKey[32];
@@ -97,6 +114,9 @@ void handleSerialCommands();
 void drawMenu();
 void handleEncoderAndFingerprint();
 int getBatteryPercentage();
+void drawBootScreen();
+void checkFirstTimeSetup();
+void handleSetupSerial(JsonDocument& doc, const String& command);
 
 // ==========================================
 // SETUP
@@ -107,6 +127,9 @@ void setup() {
     tft.init();
     tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
+    
+    // ── Boot Welcome Screen ─────────────────────────
+    drawBootScreen();
     
     // Rotary Encoder
     ESP32Encoder::useInternalWeakPullResistors = UP;
@@ -122,6 +145,7 @@ void setup() {
     
     prefs.begin("mahfadha", false);
     failedAttempts = prefs.getInt("fails", 0);
+    setupComplete = prefs.getBool("setup_done", false);
 
     fpSerial.begin(57600, SERIAL_8N1, FP_RX_PIN, FP_TX_PIN);
     finger.begin(57600);
@@ -130,9 +154,48 @@ void setup() {
     }
 
     initATECC608A();
-
     lastActivityTime = millis();
-    lockDevice(); 
+
+    // ── First-Time Setup Check ──────────────────────
+    checkFirstTimeSetup();
+}
+
+void drawBootScreen() {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_CYAN);
+    tft.setTextSize(3);
+    tft.setCursor(10, 30);
+    tft.println("Mahfadha Pro");
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_DARKGREY);
+    tft.setCursor(10, 65);
+    tft.println("The Ultimate Cyber Vault");
+    tft.setCursor(10, 85);
+    tft.setTextColor(0x4208); // dim grey
+    tft.println("v1.0.0 | AES-256-GCM | ATECC608A");
+    // Animated boot bar
+    for (int i = 0; i < 160; i += 4) {
+        tft.fillRect(10, 110, i, 4, TFT_CYAN);
+        delay(15);
+    }
+    delay(800);
+}
+
+void checkFirstTimeSetup() {
+    // Check if a master fingerprint is enrolled in slot 1
+    finger.getTemplateCount();
+    hasMasterFingerprint = (finger.templateCount > 0);
+    
+    if (!hasMasterFingerprint || !setupComplete) {
+        // Enter SETUP MODE
+        currentScreen = SCREEN_SETUP_WAITING;
+        isGhostModeActive = false; // Allow serial during setup
+        drawMenu();
+    } else {
+        // Normal operation: lock and enable Ghost Mode
+        isGhostModeActive = true;
+        lockDevice();
+    }
 }
 
 // ==========================================
@@ -388,7 +451,7 @@ void handleEncoderAndFingerprint() {
         } else if (currentScreen == SCREEN_PIN_ENTRY) {
             selectedIndex = (selectedIndex + dir + 10) % 10;
         } else if (currentScreen == SCREEN_MAIN) {
-            selectedIndex = (selectedIndex + dir + 3) % 3;
+            selectedIndex = (selectedIndex + dir + 4) % 4;
         } else if (currentScreen == SCREEN_PASSWORDS && accounts.size() > 0) {
             selectedIndex = (selectedIndex + dir + accounts.size()) % accounts.size();
         } else if (currentScreen == SCREEN_PASSWORD_ACTIONS) {
@@ -407,7 +470,7 @@ void handleEncoderAndFingerprint() {
             pinEntryBuffer += String(selectedIndex);
             if (pinEntryBuffer.length() == 6) {
                 if (pinEntryBuffer == MASTER_PIN) {
-                    unlockDevice(0, MASTER_PIN); // Success via PIN
+                    unlockDevice(0, MASTER_PIN);
                 } else {
                     handleFail();
                     currentScreen = SCREEN_LOCKED;
@@ -415,7 +478,24 @@ void handleEncoderAndFingerprint() {
                 pinEntryBuffer = "";
             }
         } else if (currentScreen == SCREEN_MAIN) {
-            if (selectedIndex == 0) { currentScreen = SCREEN_PASSWORDS; selectedIndex = 0; }
+            if (selectedIndex == 0) {
+                // Passwords -> Verify Identity first
+                returnAfterVerify = SCREEN_PASSWORDS;
+                currentScreen = SCREEN_VERIFY_IDENTITY;
+                finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+                selectedIndex = 0;
+            } else if (selectedIndex == 1) {
+                returnAfterVerify = SCREEN_SEED_VAULT;
+                currentScreen = SCREEN_VERIFY_IDENTITY;
+                finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+            } else if (selectedIndex == 2) {
+                returnAfterVerify = SCREEN_FIDO2;
+                currentScreen = SCREEN_VERIFY_IDENTITY;
+                finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+            } else if (selectedIndex == 3) {
+                currentScreen = SCREEN_SETTINGS;
+                selectedIndex = 0;
+            }
         } else if (currentScreen == SCREEN_PASSWORDS) {
             if (accounts.size() > 0) {
                 currentScreen = SCREEN_PASSWORD_ACTIONS;
@@ -434,6 +514,9 @@ void handleEncoderAndFingerprint() {
             } else if (menuScrollOffset == 3) {
                 currentScreen = SCREEN_PASSWORDS;
             }
+        } else if (currentScreen == SCREEN_SEED_VAULT || currentScreen == SCREEN_FIDO2 || currentScreen == SCREEN_SETTINGS) {
+            currentScreen = SCREEN_MAIN;
+            selectedIndex = 0;
         }
         drawMenu();
     }
@@ -462,6 +545,12 @@ void handleSerialCommands() {
         
         String command = doc["cmd"].as<String>();
         
+        // 0. Setup Mode Commands (before Ghost Mode is activated)
+        if (currentScreen == SCREEN_SETUP_WAITING || currentScreen == SCREEN_SETUP_ENROLL) {
+            handleSetupSerial(doc, command);
+            return;
+        }
+
         // 1. Ghost Mode Handshake Check
         if (isGhostModeActive) {
             if (command == "handshake") {
@@ -476,7 +565,7 @@ void handleSerialCommands() {
                     Serial.println("{\"status\":\"error\",\"message\":\"Handshake failed\"}");
                 }
             }
-            return; // Ignore ALL other commands if Ghost Mode is active
+            return;
         }
 
         // Commands that require device to be Unlocked via Biometrics/PIN
