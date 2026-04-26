@@ -39,25 +39,54 @@ jobs:
           cd app
           flutter create --platforms windows .
           
-      - name: Build Flutter App (mahfadha_companion.exe)
+      - name: Build Flutter App
         run: |
           cd app
           flutter pub get
           flutter build windows --release
-          
-      - name: Prepare Final Output Folder
+
+      - name: Prepare Installer Files
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "Mahfadha-Pro-Windows"
-          $winBuild = Get-ChildItem -Path "app\build\windows" -Recurse -Filter "*.exe" | Select-Object -First 1
-          if ($winBuild) {
-            $releaseDir = $winBuild.Directory.FullName
-            Copy-Item "$releaseDir\*" "Mahfadha-Pro-Windows\" -Recurse
+          New-Item -ItemType Directory -Force "installer\flutter-release"
+          # Find the Flutter release output
+          $exeFile = Get-ChildItem -Path "app\build\windows" -Recurse -Filter "mahfadha_companion.exe" | Select-Object -First 1
+          if ($exeFile) {
+            Copy-Item "$($exeFile.Directory.FullName)\*" "installer\flutter-release\" -Recurse
+          } else {
+            # Fallback: find any .exe in the runner Release folder
+            $releaseDir = Get-ChildItem -Path "app\build\windows" -Recurse -Directory -Filter "Release" | Select-Object -First 1
+            if ($releaseDir) {
+              Copy-Item "$($releaseDir.FullName)\*" "installer\flutter-release\" -Recurse
+            }
           }
-          Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "Mahfadha-Pro-Windows\"
-          
-      - name: Upload EXE files as Artifact for Download
+          Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "installer\"
+
+      - name: Create App Icon for Installer
+        shell: pwsh
+        run: |
+          # Create a simple .ico file using PowerShell
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap(256, 256)
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([System.Drawing.Color]::FromArgb(11, 14, 23))
+          $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(99, 220, 255))
+          $font = New-Object System.Drawing.Font("Segoe UI", 120, [System.Drawing.FontStyle]::Bold)
+          $sf = New-Object System.Drawing.StringFormat
+          $sf.Alignment = [System.Drawing.StringAlignment]::Center
+          $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+          $rect = New-Object System.Drawing.RectangleF(0, 0, 256, 256)
+          $g.DrawString("M", $font, $brush, $rect, $sf)
+          $g.Dispose()
+          $bmp.Save("installer\icon.ico", [System.Drawing.Imaging.ImageFormat]::Icon)
+          $bmp.Dispose()
+
+      - name: Build Single Installer EXE with Inno Setup
+        run: |
+          iscc "installer\setup.iss"
+
+      - name: Upload Single Installer EXE
         uses: actions/upload-artifact@v4
         with:
-          name: Mahfadha-Pro-Windows
-          path: Mahfadha-Pro-Windows\
+          name: Mahfadha-Pro-Installer
+          path: installer-output\Mahfadha-Pro-Setup.exe
