@@ -429,10 +429,80 @@ void handleEncoderAndFingerprint() {
             if (p == FINGERPRINT_OK) {
                 p = finger.fingerSearch();
                 if (p == FINGERPRINT_OK) {
-                    unlockDevice(finger.fingerID, ""); // Success via FP
+                    unlockDevice(finger.fingerID, "");
                 } else {
                     handleFail();
                 }
+            }
+        }
+    }
+
+    // 1b. Verify Identity before sensitive action
+    if (isUnlocked && currentScreen == SCREEN_VERIFY_IDENTITY) {
+        uint8_t p = finger.getImage();
+        if (p == FINGERPRINT_OK) {
+            p = finger.image2Tz();
+            if (p == FINGERPRINT_OK) {
+                p = finger.fingerSearch();
+                if (p == FINGERPRINT_OK) {
+                    finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_GREEN, 10);
+                    currentScreen = returnAfterVerify;
+                    selectedIndex = 0;
+                    lastActivityTime = millis();
+                    delay(400);
+                    finger.LEDcontrol(FINGERPRINT_LED_OFF, 0, FINGERPRINT_LED_CYAN);
+                    drawMenu();
+                } else {
+                    finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 10);
+                    delay(500);
+                    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+                }
+            }
+        }
+    }
+
+    // 1c. Setup mode fingerprint enrollment scan
+    if (currentScreen == SCREEN_SETUP_ENROLL) {
+        uint8_t p = finger.getImage();
+        if (p == FINGERPRINT_OK) {
+            p = finger.image2Tz(1);
+            if (p == FINGERPRINT_OK) {
+                finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_CYAN);
+                tft.fillScreen(TFT_BLACK);
+                tft.setCursor(10, 50);
+                tft.setTextColor(TFT_YELLOW);
+                tft.setTextSize(2);
+                tft.println("Lift & Replace");
+                tft.println("Finger...");
+                delay(2000);
+                // Second read
+                while (finger.getImage() != FINGERPRINT_OK) delay(50);
+                p = finger.image2Tz(2);
+                if (p == FINGERPRINT_OK) {
+                    p = finger.createModel();
+                    if (p == FINGERPRINT_OK) {
+                        p = finger.storeModel(1); // Store in slot 1
+                        if (p == FINGERPRINT_OK) {
+                            finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_GREEN, 10);
+                            currentScreen = SCREEN_SETUP_ENROLL_OK;
+                            hasMasterFingerprint = true;
+                            drawMenu();
+                            Serial.println("{\"status\":\"success\",\"message\":\"Fingerprint enrolled\"}");
+                            delay(2000);
+                            // Mark setup complete, activate Ghost Mode
+                            setupComplete = true;
+                            prefs.putBool("setup_done", true);
+                            isGhostModeActive = true;
+                            lockDevice();
+                            return;
+                        }
+                    }
+                }
+                // If we got here, enrollment failed
+                finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 10);
+                Serial.println("{\"status\":\"error\",\"message\":\"Enrollment failed, retry\"}");
+                delay(1000);
+                finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_CYAN);
             }
         }
     }
@@ -631,6 +701,33 @@ void handleSerialCommands() {
 }
 
 // ==========================================
+// SETUP WIZARD SERIAL HANDLER
+// ==========================================
+void handleSetupSerial(JsonDocument& doc, const String& command) {
+    if (command == "enroll_finger") {
+        currentScreen = SCREEN_SETUP_ENROLL;
+        finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_CYAN);
+        drawMenu();
+        Serial.println("{\"status\":\"success\",\"message\":\"Place finger on sensor\"}");
+    }
+    else if (command == "set_pin") {
+        String newPin = doc["pin"].as<String>();
+        if (newPin.length() == 6) {
+            prefs.putString("master_pin", newPin);
+            Serial.println("{\"status\":\"success\",\"message\":\"PIN set\"}");
+        } else {
+            Serial.println("{\"status\":\"error\",\"message\":\"PIN must be 6 digits\"}");
+        }
+    }
+    else if (command == "ping") {
+        Serial.println("{\"status\":\"success\",\"message\":\"Setup mode active\"}");
+    }
+    else {
+        Serial.println("{\"status\":\"error\",\"message\":\"Setup mode: only enroll_finger/set_pin/ping allowed\"}");
+    }
+}
+
+// ==========================================
 // UI
 // ==========================================
 void drawMenu() {
@@ -638,7 +735,7 @@ void drawMenu() {
     tft.setTextSize(2);
     tft.setCursor(0, 0);
     
-    // Battery
+    // Battery indicator
     tft.setTextSize(1);
     tft.setCursor(120, 0);
     tft.setTextColor(TFT_GREEN);
@@ -646,7 +743,47 @@ void drawMenu() {
     tft.setTextSize(2);
     tft.setCursor(0, 15);
 
-    if (currentScreen == SCREEN_LOCKED) {
+    // ── Setup Screens ─────────────────────────────
+    if (currentScreen == SCREEN_SETUP_WAITING) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("Setup Mode");
+        tft.println("");
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(1);
+        tft.println("Connect to PC using the");
+        tft.println("Mahfadha Companion App");
+        tft.println("");
+        tft.setTextColor(TFT_DARKGREY);
+        tft.println("Waiting for serial...");
+    }
+    else if (currentScreen == SCREEN_SETUP_ENROLL) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("Fingerprint");
+        tft.println("");
+        tft.setTextColor(TFT_WHITE);
+        tft.println("Place your finger");
+        tft.println("on the sensor");
+    }
+    else if (currentScreen == SCREEN_SETUP_ENROLL_OK) {
+        tft.setTextColor(TFT_GREEN);
+        tft.println("Linked!");
+        tft.println("");
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(1);
+        tft.println("Master fingerprint saved.");
+        tft.println("Device is now secured.");
+    }
+    // ── Verify Identity ───────────────────────────
+    else if (currentScreen == SCREEN_VERIFY_IDENTITY) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("Verify Identity");
+        tft.println("");
+        tft.setTextColor(TFT_WHITE);
+        tft.println("Scan fingerprint");
+        tft.println("to continue");
+    }
+    // ── Normal Screens ────────────────────────────
+    else if (currentScreen == SCREEN_LOCKED) {
         tft.setTextColor(TFT_ORANGE);
         tft.println("Mahfadha Pro");
         tft.println("");
@@ -674,8 +811,8 @@ void drawMenu() {
         tft.println("Mahfadha Pro");
         tft.setTextColor(TFT_WHITE);
         tft.println("----------------");
-        String items[] = {"Vault", "TOTP", "Settings"};
-        for (int i = 0; i < 3; i++) {
+        String items[] = {"Passwords", "Seed Vault", "FIDO2 Key", "Settings"};
+        for (int i = 0; i < 4; i++) {
             if (i == selectedIndex) { tft.setTextColor(TFT_GREEN); tft.print("> "); }
             else { tft.setTextColor(TFT_WHITE); tft.print("  "); }
             tft.println(items[i]);
@@ -704,5 +841,35 @@ void drawMenu() {
             else { tft.setTextColor(TFT_WHITE); tft.print("  "); }
             tft.println(items[i]);
         }
+    }
+    else if (currentScreen == SCREEN_SEED_VAULT) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("Seed Vault");
+        tft.setTextColor(TFT_WHITE);
+        tft.println("----------------");
+        tft.setTextSize(1);
+        tft.println("BIP-39 Mnemonic storage");
+        tft.println("Click to go back");
+    }
+    else if (currentScreen == SCREEN_FIDO2) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("FIDO2 Key");
+        tft.setTextColor(TFT_WHITE);
+        tft.println("----------------");
+        tft.setTextSize(1);
+        tft.println("WebAuthn / U2F");
+        tft.println("Click to go back");
+    }
+    else if (currentScreen == SCREEN_SETTINGS) {
+        tft.setTextColor(TFT_CYAN);
+        tft.println("Settings");
+        tft.setTextColor(TFT_WHITE);
+        tft.println("----------------");
+        tft.setTextSize(1);
+        tft.println("Factory Reset");
+        tft.println("Change PIN");
+        tft.println("About");
+        tft.println("");
+        tft.println("Click to go back");
     }
 }
