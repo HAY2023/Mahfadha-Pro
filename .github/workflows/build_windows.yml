@@ -34,6 +34,11 @@ jobs:
       - name: Enable Windows Desktop in Flutter
         run: flutter config --enable-windows-desktop
         
+      - name: Generate Windows Platform Files
+        run: |
+          cd app
+          flutter create --platforms windows .
+          
       - name: Build Flutter App (mahfadha_companion.exe)
         run: |
           cd app
@@ -41,13 +46,18 @@ jobs:
           flutter build windows --release
           
       - name: Prepare Final Output Folder
+        shell: pwsh
         run: |
-          mkdir Mahfadha-Pro-Windows
-          copy "app\build\windows\x64\runner\Release\*" "Mahfadha-Pro-Windows\"
-          copy "cli-bridge\dist\mahfadha_bridge.exe" "Mahfadha-Pro-Windows\"
+          New-Item -ItemType Directory -Force "Mahfadha-Pro-Windows"
+          $winBuild = Get-ChildItem -Path "app\build\windows" -Recurse -Filter "*.exe" | Select-Object -First 1
+          if ($winBuild) {
+            $releaseDir = $winBuild.Directory.FullName
+            Copy-Item "$releaseDir\*" "Mahfadha-Pro-Windows\" -Recurse
+          }
+          Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "Mahfadha-Pro-Windows\"
           
       - name: Upload EXE files as Artifact for Download
         uses: actions/upload-artifact@v4
         with:
           name: Mahfadha-Pro-Windows
-          path: Mahfadha-Pro-Windows\*
+          path: Mahfadha-Pro-Windows\
