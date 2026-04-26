@@ -1,0 +1,4 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.mahfadha.bridge]
+@="C:\\Program Files\\Mahfadha Pro\\native-messaging-host.json"

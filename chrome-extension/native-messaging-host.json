@@ -1,0 +1,9 @@
+{
+  "name": "com.mahfadha.bridge",
+  "description": "Mahfadha Pro Native Messaging Host — Secure bridge between Chrome Extension and local hardware password manager.",
+  "path": "C:\\Program Files\\Mahfadha Pro\\mahfadha_bridge.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://YOUR_EXTENSION_ID_HERE/"
+  ]
+}

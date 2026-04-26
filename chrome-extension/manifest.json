@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Mahfadha Pro",
+  "version": "1.0.0",
+  "description": "Secure hardware password manager bridge. Captures login credentials and sends them directly to your Mahfadha Pro hardware vault via Native Messaging. Zero browser storage.",
+  "permissions": [
+    "nativeMessaging",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Mahfadha Pro — Hardware Vault"
+  }
+}
