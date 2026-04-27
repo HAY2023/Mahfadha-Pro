@@ -2,7 +2,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "HAY2023"
 #define MyAppURL "https://github.com/HAY2023/Mahfadha-Pro"
-#define MyAppExeName "mahfadha_companion.exe"
+#define MyAppExeName "MahfadhaPro.exe"
 
 [Setup]
 AppId={{B8A3D2F1-7E4C-4A9B-8F1D-2C5E6A7B8D9F}

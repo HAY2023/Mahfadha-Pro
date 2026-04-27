@@ -10,7 +10,7 @@ import '../providers/app_state.dart';
 import 'dart:math';
 
 // ═══════════════════════════════════════════════════════════════════════
-//  CSV IMPORTER — المستورد الشبحي (Ghost Importer)
+//  CSV IMPORTER — معالج استيراد البيانات
 //  كل البيانات في الذاكرة العشوائية فقط — صفر بقاء على القرص
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -137,7 +137,7 @@ class _CsvImporterWidgetState extends State<CsvImporterWidget>
   Future<void> _sendToHardware() async {
     setState(() {
       _isSending = true;
-      _statusMessage = 'جاري تشفير وإرسال البيانات إلى الدرع...';
+      _statusMessage = 'جاري تشفير وإرسال البيانات إلى وحدة التشفير...';
     });
 
     // محاكاة إرسال كل إدخال إلى ESP32
@@ -179,12 +179,12 @@ class _CsvImporterWidgetState extends State<CsvImporterWidget>
               Row(children: [
                 const Icon(Icons.upload_file_rounded, color: MarsTheme.cyanNeon, size: 26),
                 const SizedBox(width: 10),
-                Text('المستورد الشبحي — CSV', style: GoogleFonts.cairo(
+                Text('استيراد بيانات CSV', style: GoogleFonts.cairo(
                   color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700,
                 )),
               ]),
               const SizedBox(height: 6),
-              Text('استيراد من Bitwarden أو Chrome — الذاكرة العشوائية فقط',
+              Text('استيراد من Bitwarden أو Chrome مع معالجة مؤقتة داخل الذاكرة فقط',
                 style: GoogleFonts.cairo(color: MarsTheme.textMuted, fontSize: 12)),
               const SizedBox(height: 24),
 
@@ -240,7 +240,7 @@ class _CsvImporterWidgetState extends State<CsvImporterWidget>
                     child: ElevatedButton.icon(
                       onPressed: _sendToHardware,
                       icon: const Icon(Icons.send_rounded, size: 20),
-                      label: Text('إرسال إلى الدرع', style: GoogleFonts.cairo(fontWeight: FontWeight.w600)),
+                      label: Text('إرسال إلى وحدة التشفير', style: GoogleFonts.cairo(fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: MarsTheme.success,
                         foregroundColor: Colors.white,
@@ -418,7 +418,7 @@ class PasswordHealthDashboard extends StatelessWidget {
                   Row(children: [
                     const Icon(Icons.health_and_safety, color: MarsTheme.cyanNeon, size: 24),
                     const SizedBox(width: 10),
-                    Text('صحة القبو السيبراني', style: GoogleFonts.cairo(
+                    Text('تحليل قوة كلمات المرور', style: GoogleFonts.cairo(
                       color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700)),
                   ]),
                   const SizedBox(height: 8),
@@ -447,11 +447,11 @@ class PasswordHealthDashboard extends StatelessWidget {
                         icon: Icons.copy_all,
                       ),
                       _HealthGauge(
-                        label: 'نقاط القبو',
+                        label: 'التقييم العام',
                         value: analysis.overallScore / 100,
                         count: '${analysis.overallScore}%',
                         color: _scoreColor(analysis.overallScore),
-                        icon: Icons.shield,
+                        icon: Icons.analytics_outlined,
                       ),
                     ],
                   ),

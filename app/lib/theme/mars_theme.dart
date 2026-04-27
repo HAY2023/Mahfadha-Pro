@@ -10,17 +10,17 @@ class MarsTheme {
   static const Color spaceNavy = Color(0xFF0A0E14);
   static const Color background = spaceNavy;
   static const Color deepSpace = Color(0xFF0D1117);
-  static const Color surface = Color(0xFF131829);
-  static const Color surfaceLight = Color(0xFF1A2235);
-  static const Color cardGlass = Color(0x2A1E2A4A);
+  static const Color surface = Color(0xFF111725);
+  static const Color surfaceLight = Color(0xFF182133);
+  static const Color cardGlass = Color(0x2A152033);
 
   // ── ألوان النيون ──────────────────────────────────────────────────
   static const Color cyanNeon = Color(0xFF00FFFF);
   static const Color cyan = cyanNeon;
-  static const Color cyanDim = Color(0xFF2AA5C8);
+  static const Color cyanDim = Color(0xFF43A9C7);
   static const Color cyanGlow = Color(0xFF63DCFF);
-  static const Color accent = Color(0xFF7C5CFC);
-  static const Color borderGlow = Color(0x2663DCFF);
+  static const Color accent = Color(0xFF6FA8C0);
+  static const Color borderGlow = Color(0x3350BDE0);
 
   // ── ألوان الحالة ──────────────────────────────────────────────────
   static const Color success = Color(0xFF34D399);
@@ -34,21 +34,21 @@ class MarsTheme {
 
   // ── التدرجات ──────────────────────────────────────────────────────
   static const LinearGradient cyanGradient = LinearGradient(
-    colors: [Color(0xFF0891B2), Color(0xFF3B82F6)],
+    colors: [Color(0xFF0B879F), Color(0xFF33B7D8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xD40F1728), Color(0xC81E293B)],
+    colors: [Color(0xD80B1220), Color(0xCC162338)],
     begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+    end: Alignment.bottomCenter,
   );
 
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF0A0E14), Color(0xFF0F172A), Color(0xFF0A0E14)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
+    colors: [Color(0xFF090D13), Color(0xFF0D1522), Color(0xFF090D13)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
 
   static const RadialGradient marsRadial = RadialGradient(
@@ -150,9 +150,9 @@ class MarsTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: cyanNeon,
           foregroundColor: spaceNavy,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: GoogleFonts.cairo(
             fontWeight: FontWeight.w600,
@@ -165,9 +165,9 @@ class MarsTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: cyanNeon,
           side: const BorderSide(color: cyanNeon, width: 1.5),
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),

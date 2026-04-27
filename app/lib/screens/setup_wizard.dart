@@ -21,7 +21,7 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
   List<String> _seedWords = [];
   // Step 5: Progress
   double _progress = 0;
-  String _progressLabel = 'Initializing...';
+  String _progressLabel = 'جارٍ التهيئة...';
 
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
@@ -42,7 +42,7 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
   void _next() {
     if (_step == 2 && _pin.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a 6-digit PIN'), backgroundColor: Color(0xFFF87171)),
+        const SnackBar(content: Text('أدخل رمز PIN مكوناً من 6 أرقام'), backgroundColor: Color(0xFFF87171)),
       );
       return;
     }
@@ -68,7 +68,7 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
       'bronze','bullet','burden','cabin','camel','canal','canyon','carbon',
       'castle','catalog','cedar','cellar','cipher','citrus','claim','cliff',
       'cloud','cobalt','comet','coral','cosmic','crane','crater','credit',
-      'cross','crown','cruise','crystal','cube','custom','cyber','dawn',
+      'cross','crown','cruise','crystal','cube','custom','cipher','dawn',
       'debris','decade','delta','denial','deploy','desert','device','diesel',
       'digital','domain','dragon','drift','eagle','echo','eclipse','elite',
       'ember','emerge','empire','enable','endure','enigma','epoch','equip',
@@ -80,12 +80,12 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
 
   Future<void> _runInit() async {
     final labels = [
-      'Generating AES-256 Master Key...',
-      'Writing to ATECC608A Secure Element...',
-      'Enrolling biometric template...',
-      'Encrypting Hardware Vault...',
-      'Formatting NVM partitions...',
-      'Finalizing setup...',
+      'إنشاء مفتاح AES-256 الرئيسي...',
+      'كتابة المفتاح داخل الشريحة الآمنة ATECC608A...',
+      'تسجيل البصمة الحيوية...',
+      'تجهيز وحدة التشفير...',
+      'تهيئة أقسام الذاكرة غير المتطايرة...',
+      'إغلاق خطوات التهيئة...',
     ];
     for (int i = 0; i < labels.length; i++) {
       await Future.delayed(const Duration(milliseconds: 700));
@@ -127,13 +127,13 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       child: Row(
         children: [
-          const Icon(Icons.shield_outlined, color: MarsTheme.cyan, size: 20),
+          const Icon(Icons.memory_rounded, color: MarsTheme.cyan, size: 20),
           const SizedBox(width: 8),
           Text('MAHFADHA PRO', style: GoogleFonts.inter(
             color: MarsTheme.cyan, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 2,
           )),
           const Spacer(),
-          Text('SETUP WIZARD', style: GoogleFonts.inter(
+          Text('التهيئة الأولية', style: GoogleFonts.cairo(
             color: MarsTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.5,
           )),
         ],
@@ -200,25 +200,25 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
           builder: (_, child) => Opacity(opacity: _pulseAnim.value, child: child),
           child: ShaderMask(
             shaderCallback: (rect) => MarsTheme.cyanGradient.createShader(rect),
-            child: const Icon(Icons.security, size: 80, color: Colors.white),
+            child: const Icon(Icons.verified_user_outlined, size: 80, color: Colors.white),
           ),
         ),
         const SizedBox(height: 32),
-        Text('Welcome to Mahfadha Pro', style: GoogleFonts.inter(
+        Text('مرحباً بك في Mahfadha Pro', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5,
         )),
         const SizedBox(height: 8),
         ShaderMask(
           shaderCallback: (rect) => MarsTheme.cyanGradient.createShader(rect),
-          child: Text('The Ultimate Cyber Vault', style: GoogleFonts.inter(
+          child: Text('تهيئة وحدة التشفير الاحترافية', style: GoogleFonts.cairo(
             color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500,
           )),
         ),
         const SizedBox(height: 24),
         Text(
-          'Your passwords are about to be protected by military-grade\nhardware encryption. Let\'s configure your device.',
+          'سيتم الآن تهيئة الجهاز لحماية بياناتك داخل وحدة تشفير مخصصة.\nأكمل الخطوات التالية لتجهيز البيئة التشغيلية.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(color: MarsTheme.textSecondary, fontSize: 14, height: 1.6),
+          style: GoogleFonts.cairo(color: MarsTheme.textSecondary, fontSize: 14, height: 1.8),
         ),
       ]),
     ));
@@ -251,14 +251,14 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
           ),
         ),
         const SizedBox(height: 32),
-        Text('Enroll Your Fingerprint', style: GoogleFonts.inter(
+        Text('تسجيل البصمة الحيوية', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700,
         )),
         const SizedBox(height: 12),
         Text(
-          'Place your finger on the GROW R503 sensor on the hardware device.\nThe bridge will send the enrollment command automatically.',
+          'ضع إصبعك على المستشعر الحيوي في الجهاز.\nسيتم إرسال أمر التسجيل إلى الجسر المحلي تلقائياً.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(color: MarsTheme.textSecondary, fontSize: 13, height: 1.6),
+          style: GoogleFonts.cairo(color: MarsTheme.textSecondary, fontSize: 13, height: 1.8),
         ),
         const SizedBox(height: 24),
         Container(
@@ -284,12 +284,12 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
     return Center(child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 60),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Set Emergency PIN', style: GoogleFonts.inter(
+        Text('تعيين رمز PIN احتياطي', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700,
         )),
         const SizedBox(height: 8),
-        Text('6-digit fallback PIN in case biometrics fail',
-          style: GoogleFonts.inter(color: MarsTheme.textSecondary, fontSize: 13)),
+        Text('رمز مكوّن من 6 أرقام للاستخدام عند تعذر المصادقة الحيوية',
+          style: GoogleFonts.cairo(color: MarsTheme.textSecondary, fontSize: 13)),
         const SizedBox(height: 28),
         // PIN Display
         Row(
@@ -374,7 +374,7 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
     return Center(child: SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 60),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Recovery Seed Phrase', style: GoogleFonts.inter(
+        Text('عبارة الاستعادة', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700,
         )),
         const SizedBox(height: 12),
@@ -389,8 +389,8 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
             const Icon(Icons.warning_amber_rounded, color: MarsTheme.warning, size: 20),
             const SizedBox(width: 10),
             Expanded(child: Text(
-              'Write this down. It will never be shown again and is never saved on your PC.',
-              style: GoogleFonts.inter(color: MarsTheme.warning, fontSize: 12, fontWeight: FontWeight.w500),
+              'دوّن هذه العبارة في وسيط آمن. لن تظهر مرة أخرى ولن تُحفظ على هذا الجهاز.',
+              style: GoogleFonts.cairo(color: MarsTheme.warning, fontSize: 12, fontWeight: FontWeight.w500),
             )),
           ]),
         ),
@@ -452,8 +452,8 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
         ),
         const SizedBox(height: 32),
         Text(
-          _progress >= 1 ? 'Vault Ready' : 'Encrypting Hardware Vault...',
-          style: GoogleFonts.inter(color: MarsTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+          _progress >= 1 ? 'اكتملت التهيئة' : 'جارٍ تجهيز وحدة التشفير...',
+          style: GoogleFonts.cairo(color: MarsTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Text(_progressLabel, style: GoogleFonts.firaCode(color: MarsTheme.textMuted, fontSize: 12)),
@@ -484,13 +484,13 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
           OutlinedButton.icon(
             onPressed: _back,
             icon: const Icon(Icons.arrow_back, size: 16),
-            label: const Text('Back'),
+            label: const Text('السابق'),
           ),
         const Spacer(),
         ElevatedButton.icon(
           onPressed: _next,
           icon: const Icon(Icons.arrow_forward, size: 16),
-          label: Text(_step == 3 ? 'I\'ve Written It Down' : 'Continue'),
+          label: Text(_step == 3 ? 'تم التدوين' : 'متابعة'),
         ),
       ]),
     );

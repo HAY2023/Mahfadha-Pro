@@ -79,7 +79,7 @@ jobs:
           }
 
           # Verify the main exe exists in the copied files
-          $exeName = "mahfadha_companion.exe"
+          $exeName = "MahfadhaPro.exe"
           if (-not (Test-Path "installer\flutter-release\$exeName")) {
             Write-Host "WARNING: $exeName not found. Looking for available exe files..."
             $exeFiles = Get-ChildItem "installer\flutter-release\*.exe"

@@ -40,11 +40,11 @@ The secure middleware.
 ### 📥 Download the Pre-built `.exe` (Windows)
 The easiest way to get started on Windows is to download the pre-built binaries:
 1. Go to the [Releases](../../releases) page on GitHub.
-2. Download the `Mahfadha-Pro-Windows.zip` file from the latest release.
-3. Extract the ZIP file.
-4. Run `app.exe` (or `mahfadha_bridge.exe` via command line).
+2. Download `Mahfadha-Pro-Setup.exe` from the latest release.
+3. Run the installer and complete setup.
+4. If you need the portable package, download `Mahfadha-Pro-Windows.zip`.
 
-> **Note:** The executables are automatically built using GitHub Actions whenever a new tag is released.
+> **Note:** GitHub Actions automatically builds and publishes `Mahfadha-Pro-Setup.exe`, `Mahfadha-Pro-Windows.zip`, and `firmware.bin` whenever a new Git tag like `v1.2.0` is pushed.
 
 ---
 

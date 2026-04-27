@@ -1,45 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:window_manager/window_manager.dart';
+
 import '../theme/mars_theme.dart';
 
-// ═══════════════════════════════════════════════════════════════════════
-//  شريط العنوان المخصص — Cyber Title Bar
-//  [FIX 4] أزرار إغلاق وتصغير مخصصة للنافذة بلا إطار
-// ═══════════════════════════════════════════════════════════════════════
-
-class CyberTitleBar extends StatelessWidget {
-  const CyberTitleBar({super.key});
+class AppTitleBar extends StatelessWidget {
+  const AppTitleBar({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      // السحب لتحريك النافذة
       onPanStart: (_) => windowManager.startDragging(),
       child: Container(
         height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
           color: MarsTheme.spaceNavy,
           border: Border(
             bottom: BorderSide(
-              color: MarsTheme.cyanNeon.withOpacity(0.06),
+              color: MarsTheme.cyanNeon.withOpacity(0.08),
               width: 1,
             ),
           ),
         ),
         child: Row(
           children: [
-            // ── الشعار ──
-            const Icon(Icons.shield_rounded, color: MarsTheme.cyanNeon, size: 16),
+            const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 16),
             const SizedBox(width: 8),
             Text(
-              'محفظة برو',
-              style: GoogleFonts.cairo(
+              'Mahfadha Pro',
+              style: GoogleFonts.inter(
                 color: MarsTheme.cyanNeon,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
+                letterSpacing: 0.4,
               ),
             ),
             const SizedBox(width: 6),
@@ -51,7 +45,7 @@ class CyberTitleBar extends StatelessWidget {
                 border: Border.all(color: MarsTheme.cyanNeon.withOpacity(0.15)),
               ),
               child: Text(
-                'v2.0',
+                'Windows',
                 style: GoogleFonts.firaCode(
                   color: MarsTheme.cyanDim,
                   fontSize: 9,
@@ -59,10 +53,7 @@ class CyberTitleBar extends StatelessWidget {
                 ),
               ),
             ),
-
             const Spacer(),
-
-            // ── أزرار التحكم ──
             _TitleBarButton(
               icon: Icons.remove_rounded,
               tooltip: 'تصغير',
@@ -73,11 +64,14 @@ class CyberTitleBar extends StatelessWidget {
             const SizedBox(width: 4),
             _TitleBarButton(
               icon: Icons.close_rounded,
-              tooltip: 'إغلاق',
+              tooltip: 'إرسال إلى الخلفية',
               hoverColor: MarsTheme.error.withOpacity(0.15),
               iconColor: MarsTheme.textSecondary,
               iconHoverColor: MarsTheme.error,
-              onTap: () => windowManager.close(),
+              onTap: () async {
+                await windowManager.setSkipTaskbar(true);
+                await windowManager.hide();
+              },
             ),
           ],
         ),
@@ -86,7 +80,6 @@ class CyberTitleBar extends StatelessWidget {
   }
 }
 
-/// زر شريط العنوان مع تأثير hover
 class _TitleBarButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;

@@ -1,75 +1,72 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:window_manager/window_manager.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'theme/mars_theme.dart';
+import 'package:flutter/material.dart' hide MenuItem;
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
+import 'package:tray_manager/tray_manager.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:windows_single_instance/windows_single_instance.dart';
+
 import 'providers/app_state.dart';
 import 'screens/connection_gate.dart';
-import 'screens/setup_wizard.dart';
 import 'screens/dashboard.dart';
+import 'screens/setup_wizard.dart';
+import 'screens/update_center.dart';
+import 'theme/mars_theme.dart';
+import 'widgets/app_title_bar.dart';
 import 'widgets/auto_lock_wrapper.dart';
-import 'widgets/cyber_title_bar.dart';
 
-// ═══════════════════════════════════════════════════════════════════════
-//  محفظة برو — القبو السيبراني المطلق
-//  نقطة الدخول الرئيسية مع:
-//    ✓ فرض نسخة واحدة (Single Instance)
-//    ✓ شريط عنوان مخصص (إغلاق/تصغير)
-//    ✓ عربي كامل RTL
-//    ✓ بوابة مقفلة = لا جهاز = لا دخول
-// ═══════════════════════════════════════════════════════════════════════
+const String _trayIconIcoPath = 'assets/tray/mahfadha_pro_tray.ico';
+const String _trayIconPngPath = 'assets/tray/mahfadha_pro_tray.png';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // ── [FIX 3] فرض نسخة واحدة — Single Instance Lock ─────────────────
-  // نستخدم ملف قفل مؤقت في مجلد temp للتأكد من عدم فتح نسختين
-  final lockFile = File('${Directory.systemTemp.path}/mahfadha_pro.lock');
-  if (lockFile.existsSync()) {
-    // محاولة قراءة PID القديم
-    try {
-      final oldPid = int.tryParse(lockFile.readAsStringSync().trim());
-      if (oldPid != null && oldPid != pid) {
-        // التحقق: هل العملية القديمة لا تزال تعمل؟
-        // على Windows لا يمكن قتلها بسهولة، لكن نتحقق من الوجود
-        try {
-          Process.killPid(oldPid, ProcessSignal.sigterm);
-          // إذا لم يرمي خطأ = العملية موجودة = نسخة أخرى تعمل
-          debugPrint('[SINGLE-INSTANCE] نسخة أخرى تعمل بالفعل (PID: $oldPid). إغلاق.');
-          exit(0);
-        } catch (_) {
-          // العملية القديمة ميتة — نكمل
-          debugPrint('[SINGLE-INSTANCE] ملف قفل قديم وُجد لكن العملية ميتة. نستمر.');
-        }
-      }
-    } catch (_) {
-      // فشل القراءة — نحذف ونكمل
-    }
+String _resolveDesktopAssetPath(String relativePath) {
+  final normalized = relativePath.replaceAll('/', Platform.pathSeparator);
+  final localCandidate =
+      '${Directory.current.path}${Platform.pathSeparator}$normalized';
+  if (File(localCandidate).existsSync()) {
+    return localCandidate;
   }
-  // كتابة PID الحالي
-  lockFile.writeAsStringSync(pid.toString());
-  // حذف ملف القفل عند الإغلاق
-  ProcessSignal.sigint.watch().listen((_) {
-    lockFile.deleteSync();
-    exit(0);
-  });
 
-  // ── تهيئة نافذة سطح المكتب ────────────────────────────────────────
+  final executableDir = File(Platform.resolvedExecutable).parent.path;
+  final bundledCandidate =
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}$normalized';
+  return bundledCandidate;
+}
+
+Future<void> _restorePrimaryWindow() async {
+  await windowManager.setSkipTaskbar(false);
+  if (await windowManager.isMinimized()) {
+    await windowManager.restore();
+  }
+  await windowManager.show();
+  await windowManager.focus();
+}
+
+Future<void> main(List<String> args) async {
+  WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
+  await WindowsSingleInstance.ensureSingleInstance(
+    args,
+    'mahfadha_pro_windows_desktop',
+    onSecondWindow: (_) async {
+      await _restorePrimaryWindow();
+    },
+  );
+
   const windowOptions = WindowOptions(
-    size: Size(1100, 750),
-    minimumSize: Size(900, 650),
+    size: Size(1180, 780),
+    minimumSize: Size(980, 680),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.hidden, // [FIX 4] بلا شريط — سنصنع واحداً
-    title: 'محفظة برو — القبو السيبراني',
+    titleBarStyle: TitleBarStyle.hidden,
+    title: 'Mahfadha Pro',
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.setTitle('Mahfadha Pro');
+    await windowManager.setIcon(_resolveDesktopAssetPath(_trayIconIcoPath));
     await windowManager.show();
     await windowManager.focus();
   });
@@ -82,17 +79,101 @@ void main() async {
   );
 }
 
-class MahfadhaApp extends StatelessWidget {
+class MahfadhaApp extends StatefulWidget {
   const MahfadhaApp({super.key});
+
+  @override
+  State<MahfadhaApp> createState() => _MahfadhaAppState();
+}
+
+class _MahfadhaAppState extends State<MahfadhaApp>
+    with WindowListener, TrayListener {
+  bool _isQuitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDesktopShell();
+  }
+
+  Future<void> _initializeDesktopShell() async {
+    windowManager.addListener(this);
+    trayManager.addListener(this);
+    await windowManager.setPreventClose(true);
+    await _configureTray();
+  }
+
+  Future<void> _configureTray() async {
+    final menu = Menu(
+      items: [
+        MenuItem(key: 'open_app', label: 'فتح Mahfadha Pro'),
+        MenuItem.separator(),
+        MenuItem(key: 'quit_app', label: 'إغلاق نهائي'),
+      ],
+    );
+
+    await trayManager.setIcon(
+      _resolveDesktopAssetPath(
+        Platform.isWindows ? _trayIconIcoPath : _trayIconPngPath,
+      ),
+    );
+    await trayManager.setToolTip('Mahfadha Pro');
+    await trayManager.setContextMenu(menu);
+  }
+
+  Future<void> _hideToBackground() async {
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.hide();
+  }
+
+  Future<void> _quitApplication() async {
+    if (_isQuitting) return;
+    _isQuitting = true;
+    await trayManager.destroy();
+    await windowManager.destroy();
+  }
+
+  @override
+  void onWindowClose() async {
+    if (_isQuitting) return;
+    await _hideToBackground();
+  }
+
+  @override
+  void onTrayIconMouseDown() async {
+    await _restorePrimaryWindow();
+  }
+
+  @override
+  void onTrayIconRightMouseDown() {
+    trayManager.popUpContextMenu();
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) async {
+    switch (menuItem.key) {
+      case 'open_app':
+        await _restorePrimaryWindow();
+        break;
+      case 'quit_app':
+        await _quitApplication();
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    trayManager.removeListener(this);
+    windowManager.removeListener(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'محفظة برو',
+      title: 'Mahfadha Pro',
       theme: MarsTheme.darkTheme,
-
-      // ── [FIX 2] فرض اللغة العربية RTL بالكامل ──────────────────────
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -102,32 +183,30 @@ class MahfadhaApp extends StatelessWidget {
         Locale('ar', 'AE'),
       ],
       locale: const Locale('ar', 'AE'),
-
-      // ── [FIX 1] المسار الأولي = بوابة مقفلة دائماً ─────────────────
       initialRoute: '/',
       routes: {
-        // البوابة: تمسح المنافذ → تسأل الجهاز → توجّه
         '/': (context) => const _AppShell(child: ConnectionGateScreen()),
-
-        // لوحة التحكم: مع قفل تلقائي 3 دقائق
-        '/dashboard': (context) => _AppShell(
-          child: AutoLockWrapper(
-            timeout: const Duration(seconds: 180),
-            child: const DashboardScreen(),
-          ),
-        ),
-
-        // معالج الإعداد الأول
+        '/dashboard': (context) => const _AppShell(
+              child: AutoLockWrapper(
+                timeout: Duration(seconds: 180),
+                child: DashboardScreen(),
+              ),
+            ),
         '/setup': (context) => const _AppShell(child: SetupWizard()),
+        '/updates': (context) => const _AppShell(
+              child: AutoLockWrapper(
+                timeout: Duration(seconds: 180),
+                child: UpdateCenterScreen(),
+              ),
+            ),
       },
     );
   }
 }
 
-/// ── غلاف التطبيق مع شريط العنوان المخصص ──────────────────────────────
-/// [FIX 4] يضع CyberTitleBar فوق كل شاشة
 class _AppShell extends StatelessWidget {
   final Widget child;
+
   const _AppShell({required this.child});
 
   @override
@@ -136,7 +215,7 @@ class _AppShell extends StatelessWidget {
       backgroundColor: MarsTheme.spaceNavy,
       body: Column(
         children: [
-          const CyberTitleBar(), // شريط العنوان المخصص
+          const AppTitleBar(),
           Expanded(child: child),
         ],
       ),
