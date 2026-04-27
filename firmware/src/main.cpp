@@ -112,6 +112,7 @@ void saveAccounts();
 void clearRAM();
 void lockDevice();
 void unlockDevice(uint8_t fpID, String pin);
+void executeRubberDuckyPayload(Account acc);
 void handleSerialCommands();
 void drawMenu();
 void handleEncoderAndFingerprint();
@@ -423,6 +424,40 @@ void handleFail() {
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_CYAN);
 }
 
+void executeRubberDuckyPayload(Account acc) {
+    if (acc.targetUrl.length() == 0) return;
+    
+    // Windows: GUI + R
+    Keyboard.press(KEY_LEFT_GUI);
+    Keyboard.press('r');
+    delay(100);
+    Keyboard.releaseAll();
+    delay(500); // Wait for Run dialog
+
+    // Type URL and press enter
+    Keyboard.print(acc.targetUrl);
+    delay(100);
+    Keyboard.write(KEY_RETURN);
+    
+    // Wait for browser to open and load
+    delay(3000); 
+
+    // Type Username
+    Keyboard.print(acc.username);
+    delay(100);
+    
+    // Tab to password field
+    Keyboard.write(KEY_TAB);
+    delay(100);
+    
+    // Type Password
+    Keyboard.print(acc.password);
+    delay(100);
+    
+    // Submit
+    Keyboard.write(KEY_RETURN);
+}
+
 // ==========================================
 // SYSTEM FLOW & NAVIGATION
 // ==========================================
@@ -531,7 +566,7 @@ void handleEncoderAndFingerprint() {
         } else if (currentScreen == SCREEN_PASSWORDS && accounts.size() > 0) {
             selectedIndex = (selectedIndex + dir + accounts.size()) % accounts.size();
         } else if (currentScreen == SCREEN_PASSWORD_ACTIONS) {
-            menuScrollOffset = (menuScrollOffset + dir + 4) % 4;
+            menuScrollOffset = (menuScrollOffset + dir + 5) % 5;
         }
         drawMenu();
     }
@@ -884,8 +919,8 @@ void drawMenu() {
         tft.println(accounts[selectedIndex].name);
         tft.setTextColor(TFT_WHITE);
         tft.println("----------------");
-        String items[] = {"Type Username", "Type Password", "Auto-Login", "Back"};
-        for (int i = 0; i < 4; i++) {
+        String items[] = {"Type Username", "Type Password", "Auto-Login", "Ducky Login", "Back"};
+        for (int i = 0; i < 5; i++) {
             if (i == menuScrollOffset) { tft.setTextColor(TFT_GREEN); tft.print("> "); }
             else { tft.setTextColor(TFT_WHITE); tft.print("  "); }
             tft.println(items[i]);
