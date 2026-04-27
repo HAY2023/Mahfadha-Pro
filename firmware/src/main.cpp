@@ -13,6 +13,7 @@
 #include <Adafruit_Fingerprint.h>
 #include <ESP32Encoder.h>
 #include "cryptoauthlib.h"
+#include <esp_sleep.h>
 
 // ==========================================
 // CONFIGURATION & SECURE PARAMETERS
