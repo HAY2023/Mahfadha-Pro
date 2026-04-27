@@ -91,15 +91,15 @@ jobs:
             exit 1
           }
 
-          if ($rawExe.Name -ne "MahfadhaPro.exe") {
-            Rename-Item $rawExe.FullName "MahfadhaPro.exe"
+          if ($rawExe.Name -ne "CipherVaultPro.exe") {
+            Rename-Item $rawExe.FullName "CipherVaultPro.exe"
           }
 
           Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "release-assets\portable\" -Force
 
           Compress-Archive `
             -Path "release-assets\portable\*" `
-            -DestinationPath "release-assets\Mahfadha-Pro-Windows.zip" `
+            -DestinationPath "release-assets\CipherVault-Pro-Windows.zip" `
             -Force
 
           New-Item -ItemType Directory -Force "installer\flutter-release" | Out-Null
@@ -107,7 +107,7 @@ jobs:
           Copy-Item "cli-bridge\dist\mahfadha_bridge.exe" "installer\" -Force
 
           iscc "installer\setup.iss"
-          Copy-Item "installer-output\Mahfadha-Pro-Setup.exe" "release-assets\" -Force
+          Copy-Item "installer-output\CipherVaultPro_Setup.exe" "release-assets\" -Force
 
           $firmwarePath = "firmware\.pio\build\esp32-s3-devkitc-1\firmware.bin"
           if (-not (Test-Path $firmwarePath)) {
@@ -117,8 +117,8 @@ jobs:
           Copy-Item $firmwarePath "release-assets\firmware.bin" -Force
 
           $filesForHashes = @(
-            "release-assets\Mahfadha-Pro-Setup.exe",
-            "release-assets\Mahfadha-Pro-Windows.zip",
+            "release-assets\CipherVaultPro_Setup.exe",
+            "release-assets\CipherVault-Pro-Windows.zip",
             "release-assets\firmware.bin"
           )
 
@@ -141,16 +141,16 @@ jobs:
             release_url = $releaseUrl
             assets = @{
               app = @{
-                name = "Mahfadha-Pro-Setup.exe"
-                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/Mahfadha-Pro-Setup.exe"
-                sha256 = $hashMap["Mahfadha-Pro-Setup.exe"]
-                size = (Get-Item "release-assets\Mahfadha-Pro-Setup.exe").Length
+                name = "CipherVaultPro_Setup.exe"
+                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/CipherVaultPro_Setup.exe"
+                sha256 = $hashMap["CipherVaultPro_Setup.exe"]
+                size = (Get-Item "release-assets\CipherVaultPro_Setup.exe").Length
               }
               portable = @{
-                name = "Mahfadha-Pro-Windows.zip"
-                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/Mahfadha-Pro-Windows.zip"
-                sha256 = $hashMap["Mahfadha-Pro-Windows.zip"]
-                size = (Get-Item "release-assets\Mahfadha-Pro-Windows.zip").Length
+                name = "CipherVault-Pro-Windows.zip"
+                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/CipherVault-Pro-Windows.zip"
+                sha256 = $hashMap["CipherVault-Pro-Windows.zip"]
+                size = (Get-Item "release-assets\CipherVault-Pro-Windows.zip").Length
               }
               firmware = @{
                 name = "firmware.bin"
@@ -164,11 +164,11 @@ jobs:
           $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path "release-assets\latest.json" -Encoding UTF8
 
           $releaseNotes = @()
-          $releaseNotes += "Automated build for Mahfadha Pro."
+          $releaseNotes += "Automated build for CipherVault Pro."
           $releaseNotes += ""
           $releaseNotes += "Release assets:"
-          $releaseNotes += "- Mahfadha-Pro-Setup.exe"
-          $releaseNotes += "- Mahfadha-Pro-Windows.zip"
+          $releaseNotes += "- CipherVaultPro_Setup.exe"
+          $releaseNotes += "- CipherVault-Pro-Windows.zip"
           $releaseNotes += "- firmware.bin"
           $releaseNotes += "- latest.json"
           $releaseNotes += ""
@@ -183,10 +183,10 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Mahfadha-Pro-Release
+          name: CipherVault-Pro-Release
           path: |
-            release-assets/Mahfadha-Pro-Setup.exe
-            release-assets/Mahfadha-Pro-Windows.zip
+            release-assets/CipherVaultPro_Setup.exe
+            release-assets/CipherVault-Pro-Windows.zip
             release-assets/firmware.bin
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
@@ -196,8 +196,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            release-assets/Mahfadha-Pro-Setup.exe
-            release-assets/Mahfadha-Pro-Windows.zip
+            release-assets/CipherVaultPro_Setup.exe
+            release-assets/CipherVault-Pro-Windows.zip
             release-assets/firmware.bin
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
