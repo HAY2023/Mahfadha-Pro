@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/mars_theme.dart';
+import 'csv_importer_and_health.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -60,6 +61,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _openCsvImporter() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(40),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: const CsvImporterWidget(),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     if (_port != null && _port!.isOpen) _port!.close();
@@ -108,71 +124,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           // Body
           Expanded(child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(children: [
-              // Left: Ports
-              SizedBox(
-                width: 260,
-                child: Container(
-                  decoration: MarsTheme.glassCard(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('USB DEVICES', style: GoogleFonts.inter(
-                      color: MarsTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2,
-                    )),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: ports.isEmpty
-                        ? Center(child: Text('No devices found', style: GoogleFonts.inter(color: MarsTheme.textMuted, fontSize: 13)))
-                        : ListView.separated(
-                            itemCount: ports.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (_, i) => InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => _connectDevice(ports[i]),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: MarsTheme.surfaceLight,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: MarsTheme.borderGlow),
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Column(children: [
+              Expanded(child: Row(children: [
+                // Left: Ports
+                SizedBox(
+                  width: 260,
+                  child: Container(
+                    decoration: MarsTheme.glassCard(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('USB DEVICES', style: GoogleFonts.inter(
+                        color: MarsTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2,
+                      )),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ports.isEmpty
+                          ? Center(child: Text('No devices found', style: GoogleFonts.inter(color: MarsTheme.textMuted, fontSize: 13)))
+                          : ListView.separated(
+                              itemCount: ports.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              itemBuilder: (_, i) => InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _connectDevice(ports[i]),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: MarsTheme.surfaceLight,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: MarsTheme.borderGlow),
+                                  ),
+                                  child: Row(children: [
+                                    const Icon(Icons.usb, color: MarsTheme.cyan, size: 18),
+                                    const SizedBox(width: 10),
+                                    Text(ports[i], style: GoogleFonts.firaCode(color: MarsTheme.textPrimary, fontSize: 13)),
+                                  ]),
                                 ),
-                                child: Row(children: [
-                                  const Icon(Icons.usb, color: MarsTheme.cyan, size: 18),
-                                  const SizedBox(width: 10),
-                                  Text(ports[i], style: GoogleFonts.firaCode(color: MarsTheme.textPrimary, fontSize: 13)),
-                                ]),
                               ),
                             ),
-                          ),
-                    ),
-                  ]),
+                      ),
+                    ]),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              // Right: Operations grid
-              Expanded(child: Container(
-                decoration: MarsTheme.glassCard(),
-                padding: const EdgeInsets.all(24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('SECURE OPERATIONS', style: GoogleFonts.inter(
-                    color: MarsTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2,
-                  )),
-                  const SizedBox(height: 20),
-                  Expanded(child: GridView.count(
-                    crossAxisCount: 3, childAspectRatio: 1.6,
-                    crossAxisSpacing: 14, mainAxisSpacing: 14,
-                    children: [
-                      _opCard(Icons.sync, 'Sync Time', MarsTheme.cyan, () => _sendCommand({'cmd': 'sync_time', 'time': DateTime.now().millisecondsSinceEpoch ~/ 1000})),
-                      _opCard(Icons.add_moderator, 'Add Entry', MarsTheme.success, () => _sendCommand({'cmd': 'add_account', 'name': 'New', 'username': '', 'password': ''})),
-                      _opCard(Icons.list_alt, 'List Accounts', MarsTheme.accent, () => _sendCommand({'cmd': 'list_accounts'})),
-                      _opCard(Icons.upload_file, 'Import CSV', MarsTheme.warning, () {}),
-                      _opCard(Icons.save_alt, 'Export Backup', Color(0xFF2DD4BF), () => _sendCommand({'cmd': 'export_backup'})),
-                      _opCard(Icons.delete_forever, 'Wipe Vault', MarsTheme.error, () => _sendCommand({'cmd': 'factory_reset'})),
-                    ],
-                  )),
-                ]),
-              )),
+                const SizedBox(width: 20),
+                // Right: Operations grid
+                Expanded(child: Container(
+                  decoration: MarsTheme.glassCard(),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('SECURE OPERATIONS', style: GoogleFonts.inter(
+                      color: MarsTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2,
+                    )),
+                    const SizedBox(height: 20),
+                    Expanded(child: GridView.count(
+                      crossAxisCount: 3, childAspectRatio: 1.6,
+                      crossAxisSpacing: 14, mainAxisSpacing: 14,
+                      children: [
+                        _opCard(Icons.sync, 'Sync Time', MarsTheme.cyan, () => _sendCommand({'cmd': 'sync_time', 'time': DateTime.now().millisecondsSinceEpoch ~/ 1000})),
+                        _opCard(Icons.add_moderator, 'Add Entry', MarsTheme.success, () => _sendCommand({'cmd': 'add_account', 'name': 'New', 'username': '', 'password': ''})),
+                        _opCard(Icons.list_alt, 'List Accounts', MarsTheme.accent, () => _sendCommand({'cmd': 'list_accounts'})),
+                        _opCard(Icons.upload_file, 'Import CSV', MarsTheme.warning, _openCsvImporter),
+                        _opCard(Icons.save_alt, 'Export Backup', const Color(0xFF2DD4BF), () => _sendCommand({'cmd': 'export_backup'})),
+                        _opCard(Icons.delete_forever, 'Wipe Vault', MarsTheme.error, () => _sendCommand({'cmd': 'factory_reset'})),
+                      ],
+                    )),
+                  ]),
+                )),
+              ])),
+              const SizedBox(height: 12),
+              // Password Health Dashboard
+              const PasswordHealthDashboard(),
             ]),
           )),
         ]),
