@@ -97,7 +97,8 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
     }
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    context.read<AppState>().completeSetup();
+    context.read<AppState>().markSetupComplete();
+    Navigator.pushReplacementNamed(context, '/dashboard');
   }
 
   @override
