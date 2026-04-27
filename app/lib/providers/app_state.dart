@@ -1,34 +1,52 @@
 import 'package:flutter/material.dart';
 
-/// Global application state using Provider.
-/// Zero-persistence: nothing is saved to disk. All state is volatile.
+/// ══════════════════════════════════════════════════════════════════════
+///  حالة التطبيق العامة — كل شيء في الذاكرة العشوائية فقط
+///  Zero-Persistence: لا يُحفظ أي شيء على القرص مطلقاً
+///  [FIX 5] حالة الإعداد تُقرأ من الجهاز مباشرة
+/// ══════════════════════════════════════════════════════════════════════
 class AppState extends ChangeNotifier {
-  bool _isFirstLaunch = true;
   bool _isDeviceConnected = false;
-  String _deviceStatus = 'Disconnected';
+  bool _isSetupComplete = false;     // [FIX 5] يُحدَّث من رد الجهاز فقط
+  String _deviceStatus = 'غير متصل';
+  String? _connectedPort;
 
   // ── كلمات المرور المؤقتة في الذاكرة العشوائية فقط ──
   List<Map<String, dynamic>> _tempPasswords = [];
 
-  bool get isFirstLaunch => _isFirstLaunch;
+  // ── Getters ──
   bool get isDeviceConnected => _isDeviceConnected;
+  bool get isSetupComplete => _isSetupComplete;
   String get deviceStatus => _deviceStatus;
+  String? get connectedPort => _connectedPort;
   List<Map<String, dynamic>> get tempPasswords =>
       List.unmodifiable(_tempPasswords);
 
-  void completeSetup() {
-    _isFirstLaunch = false;
+  // ── اتصال الجهاز ──
+  void setDeviceConnected(bool connected) {
+    _isDeviceConnected = connected;
+    _deviceStatus = connected ? 'متصل' : 'غير متصل';
     notifyListeners();
   }
 
-  void setDeviceConnected(bool connected) {
-    _isDeviceConnected = connected;
-    _deviceStatus = connected ? 'Connected' : 'Disconnected';
+  void setConnectedPort(String? port) {
+    _connectedPort = port;
     notifyListeners();
   }
 
   void updateStatus(String status) {
     _deviceStatus = status;
+    notifyListeners();
+  }
+
+  /// [FIX 5] تحديث حالة الإعداد من رد الجهاز — وليس تخميناً
+  void markSetupComplete() {
+    _isSetupComplete = true;
+    notifyListeners();
+  }
+
+  void markSetupNeeded() {
+    _isSetupComplete = false;
     notifyListeners();
   }
 
@@ -45,6 +63,16 @@ class AppState extends ChangeNotifier {
     }
     _tempPasswords.clear();
     notifyListeners();
-    debugPrint('[🛡️ SECURITY] Password list purged from RAM.');
+    debugPrint('[🛡️ أمان] تم مسح كلمات المرور من الذاكرة.');
+  }
+
+  /// إعادة ضبط كاملة — مسح كل شيء (عند القفل التلقائي أو فصل الجهاز)
+  void fullReset() {
+    _isDeviceConnected = false;
+    _isSetupComplete = false;
+    _deviceStatus = 'غير متصل';
+    _connectedPort = null;
+    clearPasswords();
+    debugPrint('[🛡️ أمان] إعادة ضبط كاملة — كل البيانات مُحيت.');
   }
 }

@@ -162,12 +162,10 @@ class AppStateManager {
   static void clearRam(BuildContext context) {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      appState.setDeviceConnected(false);
-      appState.updateStatus('Disconnected');
-      appState.clearPasswords();
-      debugPrint('[SECURITY] RAM cleared — all volatile data wiped.');
+      appState.fullReset();
+      debugPrint('[🛡️ أمان] تم مسح الذاكرة العشوائية بالكامل.');
     } catch (e) {
-      debugPrint('[SECURITY] RAM clear attempted: $e');
+      debugPrint('[🛡️ أمان] محاولة مسح الذاكرة: $e');
     }
   }
 }
