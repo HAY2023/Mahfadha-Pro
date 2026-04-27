@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -11,6 +12,16 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/mars_theme.dart';
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  CONNECTION GATE — Legendary Mars UI (Glassmorphism + Cyan Neon Glow)
+//
+//  ● Deep Space Navy (#0A0E14) background
+//  ● Animated Cyan Neon (#00FFFF) glowing orb in background
+//  ● Frosted-glass content card via BackdropFilter + ImageFilter.blur
+//  ● Subtle white border on glass card
+//  ● Dev skip button "تخطي حالياً (للاختبار)" at the bottom
+// ═══════════════════════════════════════════════════════════════════════════
+
 class ConnectionGateScreen extends StatefulWidget {
   const ConnectionGateScreen({super.key});
 
@@ -19,22 +30,41 @@ class ConnectionGateScreen extends StatefulWidget {
 }
 
 class _ConnectionGateScreenState extends State<ConnectionGateScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   _GatePhase _phase = _GatePhase.scanning;
   String _statusText = 'جارٍ التحقق من اتصال جهاز Mahfadha Pro عبر USB.';
   String? _connectedPort;
   List<String> _availablePorts = [];
   Timer? _scanTimer;
   SerialPort? _activePort;
+
+  // ── Animation controllers ──
   late final AnimationController _glowController;
+  late final AnimationController _orbitController;
+  late final AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+
+    // Glow pulsation for the neon orb & badge
     _glowController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2600),
     )..repeat(reverse: true);
+
+    // Slow orbit rotation for the neon orb
+    _orbitController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+
+    // Secondary pulse for the status badge ring
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+
     _startPortScan();
   }
 
@@ -43,8 +73,14 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     _scanTimer?.cancel();
     _closePort();
     _glowController.dispose();
+    _orbitController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  Serial port scanning & handshake (unchanged business logic)
+  // ═══════════════════════════════════════════════════════════════════════
 
   void _startPortScan() {
     _scanPorts();
@@ -192,6 +228,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     _tryHandshake(portName);
   }
 
+  /// Dev skip — bypass hardware waiting and go directly to the Dashboard
   Future<void> _skipForTesting() async {
     _scanTimer?.cancel();
     _closePort();
@@ -215,26 +252,40 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     _activePort = null;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  //  BUILD — Legendary Mars Glassmorphism UI
+  // ═══════════════════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: MarsTheme.backgroundGradient),
+      color: const Color(0xFF0A0E14), // Deep Space Navy
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _buildBackdrop(),
+          // ── Layer 0: Solid deep space background ──
+          Container(color: const Color(0xFF0A0E14)),
+
+          // ── Layer 1: Animated Cyan Neon glowing orb ──
+          _buildNeonOrbBackground(),
+
+          // ── Layer 2: Subtle grid / noise overlay for depth ──
+          _buildSubtleNoiseOverlay(),
+
+          // ── Layer 3: Centered frosted glass card ──
           Center(
             child: TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 420),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
               tween: Tween(begin: 0, end: 1),
               builder: (context, value, child) => Opacity(
                 opacity: value,
                 child: Transform.translate(
-                  offset: Offset(0, 20 * (1 - value)),
+                  offset: Offset(0, 30 * (1 - value)),
                   child: child,
                 ),
               ),
-              child: _buildGateCard(),
+              child: _buildFrostedGlassCard(),
             ),
           ),
         ],
@@ -242,35 +293,126 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     );
   }
 
-  Widget _buildBackdrop() {
+  // ─── NEON ORB — glowing cyan circular blurred container ─────────────
+  Widget _buildNeonOrbBackground() {
     return AnimatedBuilder(
-      animation: _glowController,
+      animation: Listenable.merge([_glowController, _orbitController]),
       builder: (context, _) {
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              radius: 1.15 + (_glowController.value * 0.25),
-              colors: [
-                MarsTheme.cyanNeon.withOpacity(0.06 + _glowController.value * 0.02),
-                MarsTheme.deepSpace,
-                MarsTheme.spaceNavy,
-              ],
+        final glowVal = _glowController.value;
+        final orbitVal = _orbitController.value;
+        final size = MediaQuery.of(context).size;
+
+        // Orb drifts in a subtle ellipse
+        final dx = math.cos(orbitVal * 2 * math.pi) * 40;
+        final dy = math.sin(orbitVal * 2 * math.pi) * 25;
+
+        return Stack(
+          children: [
+            // Primary large glow
+            Positioned(
+              left: size.width * 0.5 - 200 + dx,
+              top: size.height * 0.35 - 200 + dy,
+              child: Container(
+                width: 400,
+                height: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00FFFF)
+                          .withOpacity(0.08 + glowVal * 0.06),
+                      blurRadius: 180 + glowVal * 40,
+                      spreadRadius: 20 + glowVal * 15,
+                    ),
+                  ],
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF00FFFF)
+                          .withOpacity(0.07 + glowVal * 0.05),
+                      const Color(0xFF00FFFF).withOpacity(0.02),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
+                  ),
+                ),
+              ),
             ),
-          ),
+
+            // Secondary smaller accent glow (offset)
+            Positioned(
+              left: size.width * 0.65 - 80 - dx * 0.5,
+              top: size.height * 0.55 - 80 - dy * 0.5,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF00FFFF)
+                          .withOpacity(0.04 + glowVal * 0.03),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildGateCard() {
+  // ─── Subtle noise/vignette for cinematic depth ──────────────────────
+  Widget _buildSubtleNoiseOverlay() {
+    return IgnorePointer(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            radius: 1.2,
+            colors: [
+              Colors.transparent,
+              const Color(0xFF0A0E14).withOpacity(0.7),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  FROSTED GLASS CARD — BackdropFilter + ImageFilter.blur
+  // ═══════════════════════════════════════════════════════════════════════
+  Widget _buildFrostedGlassCard() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
           width: 560,
           padding: const EdgeInsets.all(36),
-          decoration: MarsTheme.glassCard(borderRadius: 28),
+          decoration: BoxDecoration(
+            // Frosted glass fill
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(28),
+            // Subtle white border for premium feel
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00FFFF).withOpacity(0.05),
+                blurRadius: 60,
+                spreadRadius: -10,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,6 +421,8 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
               const SizedBox(height: 28),
               Center(child: _buildStatusBadge()),
               const SizedBox(height: 24),
+
+              // Phase title
               Text(
                 _phaseTitle,
                 style: GoogleFonts.cairo(
@@ -288,6 +432,8 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                 ),
               ),
               const SizedBox(height: 10),
+
+              // Status text
               Text(
                 _statusText,
                 style: GoogleFonts.cairo(
@@ -297,25 +443,47 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              if (_phase == _GatePhase.scanning || _phase == _GatePhase.handshaking)
+
+              // Phase-specific content
+              if (_phase == _GatePhase.scanning ||
+                  _phase == _GatePhase.handshaking)
                 _buildScanSection(),
               if (_phase == _GatePhase.connected) _buildConnectedSection(),
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
+
+              const SizedBox(height: 24),
+
+              // ── Dev skip button ──
+              Center(
                 child: TextButton(
                   onPressed: _skipForTesting,
                   style: TextButton.styleFrom(
                     foregroundColor: MarsTheme.textMuted,
-                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                  ),
-                  child: Text(
-                    'تخطي حالياً (للاختبار)',
-                    style: GoogleFonts.cairo(
-                      color: MarsTheme.textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.skip_next_rounded,
+                        color: MarsTheme.textMuted.withOpacity(0.6),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'تخطي حالياً (للاختبار)',
+                        style: GoogleFonts.cairo(
+                          color: MarsTheme.textMuted.withOpacity(0.7),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -326,25 +494,33 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     );
   }
 
+  // ─── Header row ─────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Row(
       children: [
+        // Device badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: MarsTheme.surfaceLight.withOpacity(0.8),
+            color: const Color(0xFF00FFFF).withOpacity(0.06),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: MarsTheme.borderGlow),
+            border: Border.all(
+              color: const Color(0xFF00FFFF).withOpacity(0.15),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 16),
+              const Icon(
+                Icons.memory_rounded,
+                color: Color(0xFF00FFFF),
+                size: 16,
+              ),
               const SizedBox(width: 8),
               Text(
                 'جهاز Mahfadha Pro',
                 style: GoogleFonts.cairo(
-                  color: MarsTheme.cyanNeon,
+                  color: const Color(0xFF00FFFF),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -365,9 +541,10 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     );
   }
 
+  // ─── Status badge — animated glowing ring ───────────────────────────
   Widget _buildStatusBadge() {
     final color = switch (_phase) {
-      _GatePhase.scanning => MarsTheme.cyanNeon,
+      _GatePhase.scanning => const Color(0xFF00FFFF),
       _GatePhase.handshaking => MarsTheme.warning,
       _GatePhase.connected => MarsTheme.success,
     };
@@ -379,48 +556,63 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     };
 
     return AnimatedBuilder(
-      animation: _glowController,
+      animation: _pulseController,
       builder: (context, _) {
+        final pulseVal = _pulseController.value;
         return Container(
-          width: 96,
-          height: 96,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: color.withOpacity(0.2 + (_glowController.value * 0.2)),
+              color: color.withOpacity(0.15 + pulseVal * 0.25),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.08 + (_glowController.value * 0.08)),
-                blurRadius: 36,
-                spreadRadius: -10,
+                color: color.withOpacity(0.06 + pulseVal * 0.1),
+                blurRadius: 40 + pulseVal * 20,
+                spreadRadius: -8,
               ),
             ],
           ),
-          child: Icon(icon, color: color, size: 42),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  color.withOpacity(0.08),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+            child: Icon(icon, color: color, size: 42),
+          ),
         );
       },
     );
   }
 
+  // ─── Scan section — progress + port list ────────────────────────────
   Widget _buildScanSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Progress bar
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
-            minHeight: 6,
-            backgroundColor: MarsTheme.surfaceLight,
+            minHeight: 5,
+            backgroundColor: Colors.white.withOpacity(0.04),
             valueColor: AlwaysStoppedAnimation<Color>(
               _phase == _GatePhase.handshaking
                   ? MarsTheme.warning
-                  : MarsTheme.cyanNeon,
+                  : const Color(0xFF00FFFF),
             ),
           ),
         ),
         const SizedBox(height: 20),
+
         Text(
           _availablePorts.isEmpty
               ? 'لم يتم رصد أي منافذ متاحة حتى الآن.'
@@ -432,12 +624,14 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
           ),
         ),
         const SizedBox(height: 12),
+
         if (_availablePorts.isEmpty)
           _buildInfoLine(
             icon: Icons.usb_off_rounded,
             color: MarsTheme.error,
             text: 'وصّل الجهاز عبر USB ثم اترك التطبيق يعيد المسح تلقائياً.',
           ),
+
         if (_availablePorts.isNotEmpty)
           ..._availablePorts.map(
             (port) => Padding(
@@ -446,17 +640,22 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => _manualConnect(port),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
-                    color: MarsTheme.surfaceLight.withOpacity(0.7),
+                    color: Colors.white.withOpacity(0.03),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: MarsTheme.borderGlow),
+                    border: Border.all(
+                      color: const Color(0xFF00FFFF).withOpacity(0.12),
+                    ),
                   ),
                   child: Row(
                     children: [
                       const Icon(
                         Icons.usb_rounded,
-                        color: MarsTheme.cyanNeon,
+                        color: Color(0xFF00FFFF),
                         size: 18,
                       ),
                       const SizedBox(width: 10),
@@ -486,6 +685,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     );
   }
 
+  // ─── Connected section ──────────────────────────────────────────────
   Widget _buildConnectedSection() {
     return _buildInfoLine(
       icon: Icons.settings_ethernet_rounded,
@@ -496,6 +696,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     );
   }
 
+  // ─── Reusable info-line component ───────────────────────────────────
   Widget _buildInfoLine({
     required IconData icon,
     required Color color,
@@ -505,9 +706,9 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withOpacity(0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.24)),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

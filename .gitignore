@@ -16,6 +16,9 @@ cli-bridge/__pycache__/
 cli-bridge/venv/
 cli-bridge/.env
 
+# Build tools (local SDK downloads)
+_build_tools/
+
 # General
 .DS_Store
 *.log

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 ///  [FIX 5] حالة الإعداد تُقرأ من الجهاز مباشرة
 ///
 ///  [V2] Biometric-Gated Vault + Sensitive Profile Vault + Auto-Login URL
+///  [V3] Expanded data model: phoneNumbers, backupCodes, recoveryEmails
+///       + FINGERPRINT_VERIFIED signal support from ESP32
 /// ══════════════════════════════════════════════════════════════════════
 
 /// Sensitive profile entry — phone numbers, recovery emails, backup codes, etc.
@@ -35,8 +37,12 @@ class SensitiveProfileEntry {
   }
 }
 
-/// Extended account model — now includes targetURL for Rubber Ducky auto-login
-/// and a list of sensitive profile entries (phone, recovery emails, backup codes)
+/// Extended account model — includes:
+/// - targetURL for Rubber Ducky auto-login (Keystroke Injection)
+/// - phoneNumbers bound to this account (2FA recovery)
+/// - backupCodes for emergency account access
+/// - recoveryEmails for account recovery
+/// - arbitrary sensitiveEntries for anything else
 class VaultAccount {
   final int id;
   final String name;
@@ -44,7 +50,10 @@ class VaultAccount {
   final String password;
   final String targetUrl;          // For auto-login (Rubber Ducky payload)
   final String totpSecret;
-  final List<SensitiveProfileEntry> sensitiveEntries;
+  final List<String> phoneNumbers;     // [V3] Bound phone numbers (2FA)
+  final List<String> backupCodes;      // [V3] Emergency backup codes
+  final List<String> recoveryEmails;   // [V3] Recovery email addresses
+  final List<SensitiveProfileEntry> sensitiveEntries; // Arbitrary extras
 
   const VaultAccount({
     required this.id,
@@ -53,6 +62,9 @@ class VaultAccount {
     this.password = '',
     this.targetUrl = '',
     this.totpSecret = '',
+    this.phoneNumbers = const [],
+    this.backupCodes = const [],
+    this.recoveryEmails = const [],
     this.sensitiveEntries = const [],
   });
 
@@ -63,6 +75,9 @@ class VaultAccount {
     'password': password,
     'targetUrl': targetUrl,
     'totpSecret': totpSecret,
+    'phoneNumbers': phoneNumbers,
+    'backupCodes': backupCodes,
+    'recoveryEmails': recoveryEmails,
     'sensitiveEntries': sensitiveEntries.map((e) => e.toJson()).toList(),
   };
 
@@ -84,6 +99,9 @@ class VaultAccount {
       password: json['password']?.toString() ?? '',
       targetUrl: json['targetUrl']?.toString() ?? '',
       totpSecret: json['totpSecret']?.toString() ?? '',
+      phoneNumbers: _parseStringList(json['phoneNumbers']),
+      backupCodes: _parseStringList(json['backupCodes']),
+      recoveryEmails: _parseStringList(json['recoveryEmails']),
       sensitiveEntries: entries,
     );
   }
@@ -96,8 +114,48 @@ class VaultAccount {
     password: '',
     targetUrl: '',
     totpSecret: '',
+    phoneNumbers: const [],
+    backupCodes: const [],
+    recoveryEmails: const [],
     sensitiveEntries: const [],
   );
+
+  /// Whether this account has a targetUrl configured for Rubber Ducky auto-login
+  bool get hasAutoLogin => targetUrl.isNotEmpty;
+
+  /// Total count of all sensitive data items bound to this account
+  int get sensitiveDataCount =>
+      phoneNumbers.length +
+      backupCodes.length +
+      recoveryEmails.length +
+      sensitiveEntries.length;
+}
+
+/// Parse a dynamic value into a List<String> safely
+List<String> _parseStringList(dynamic value) {
+  if (value is List) {
+    return value.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+  }
+  return const [];
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Biometric verification state — tracks the ESP32 fingerprint flow
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Possible states of the biometric verification lifecycle.
+enum BiometricState {
+  /// Waiting for user to place finger on sensor
+  waitingForFinger,
+
+  /// ESP32 is actively scanning the fingerprint
+  scanning,
+
+  /// Fingerprint was verified successfully (FINGERPRINT_VERIFIED)
+  verified,
+
+  /// Fingerprint verification failed
+  failed,
 }
 
 class AppState extends ChangeNotifier {
@@ -110,11 +168,14 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> _tempPasswords = [];
 
   // ══════════════════════════════════════════════════════════════
-  //  [V2] Biometric-Gated Vault State
+  //  [V2/V3] Biometric-Gated Vault State
   // ══════════════════════════════════════════════════════════════
   /// Whether the ESP32 has confirmed biometric authentication.
   /// The vault data is NEVER decrypted or displayed until this is true.
   bool _isBiometricUnlocked = false;
+
+  /// [V3] Current state of the biometric verification flow
+  BiometricState _biometricState = BiometricState.waitingForFinger;
 
   /// Vault accounts — only populated after biometric confirmation
   List<VaultAccount> _vaultAccounts = [];
@@ -130,8 +191,9 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> get tempPasswords =>
       List.unmodifiable(_tempPasswords);
 
-  // ── [V2] Biometric Vault Getters ──
+  // ── [V2/V3] Biometric Vault Getters ──
   bool get isBiometricUnlocked => _isBiometricUnlocked;
+  BiometricState get biometricState => _biometricState;
 
   /// Returns vault accounts ONLY if biometric is unlocked.
   /// Otherwise returns empty — zero data leakage.
@@ -195,20 +257,50 @@ class AppState extends ChangeNotifier {
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  [V2] Biometric-Gated Vault Operations
+  //  [V2/V3] Biometric-Gated Vault Operations
   // ══════════════════════════════════════════════════════════════
 
-  /// Called when ESP32 sends BIOMETRIC_UNLOCKED signal.
-  /// This is the ONLY way to unlock the vault view.
-  void onBiometricUnlocked() {
-    _isBiometricUnlocked = true;
+  /// [V3] Called when ESP32 begins scanning fingerprint.
+  void onBiometricScanning() {
+    _biometricState = BiometricState.scanning;
     notifyListeners();
-    debugPrint('[🛡️ أمان] تم فتح القبو — المصادقة الحيوية تمت بنجاح.');
+    debugPrint('[🛡️ أمان] ESP32 يقوم بمسح البصمة...');
+  }
+
+  /// [V3] Called when ESP32 sends FINGERPRINT_VERIFIED signal.
+  /// This is the ONLY way to unlock the vault view.
+  /// Also handles legacy BIOMETRIC_UNLOCKED for backward compatibility.
+  void onFingerprintVerified() {
+    _isBiometricUnlocked = true;
+    _biometricState = BiometricState.verified;
+    notifyListeners();
+    debugPrint('[🛡️ أمان] تم فتح القبو — المصادقة الحيوية تمت بنجاح (FINGERPRINT_VERIFIED).');
+  }
+
+  /// Called when ESP32 sends BIOMETRIC_UNLOCKED signal.
+  /// Kept for backward compatibility — delegates to onFingerprintVerified.
+  void onBiometricUnlocked() {
+    onFingerprintVerified();
+  }
+
+  /// [V3] Called when ESP32 reports fingerprint verification failure.
+  void onBiometricFailed() {
+    _biometricState = BiometricState.failed;
+    notifyListeners();
+    debugPrint('[🛡️ أمان] فشل التحقق من البصمة.');
+    // Auto-reset to waiting state after a delay
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_biometricState == BiometricState.failed) {
+        _biometricState = BiometricState.waitingForFinger;
+        notifyListeners();
+      }
+    });
   }
 
   /// Lock the vault — scrub all decrypted data from RAM.
   void lockBiometricVault() {
     _isBiometricUnlocked = false;
+    _biometricState = BiometricState.waitingForFinger;
     // Scrub vault accounts from RAM
     for (var acc in _vaultAccounts) {
       acc = acc.scrubbed();

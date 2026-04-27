@@ -56,14 +56,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final json = jsonDecode(message);
             if (json['status'] == 'event') {
               final appState = context.read<AppState>();
-              if (json['message'] == 'BIOMETRIC_UNLOCKED') {
-                setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
-                // [V2] Signal biometric unlock to vault
-                appState.onBiometricUnlocked();
-              } else if (json['message'] == 'BIOMETRIC_LOCKED') {
-                setState(() => _status = 'الجهاز متصل وينتظر التحقق الحيوي');
-                // [V2] Lock the vault
-                appState.lockBiometricVault();
+              final eventMessage = json['message']?.toString() ?? '';
+
+              switch (eventMessage) {
+                // ── [V3] Primary signal: FINGERPRINT_VERIFIED from ESP32 ──
+                case 'FINGERPRINT_VERIFIED':
+                  setState(() => _status = 'تمت المصادقة الحيوية بنجاح ✓');
+                  appState.onFingerprintVerified();
+
+                // ── [V2] Legacy support: BIOMETRIC_UNLOCKED ──
+                case 'BIOMETRIC_UNLOCKED':
+                  setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
+                  appState.onBiometricUnlocked();
+
+                // ── [V3] Scanning in progress ──
+                case 'FINGERPRINT_SCANNING':
+                  setState(() => _status = 'جارٍ مسح البصمة...');
+                  appState.onBiometricScanning();
+
+                // ── [V3] Verification failed ──
+                case 'FINGERPRINT_FAILED':
+                  setState(() => _status = 'فشل التحقق من البصمة');
+                  appState.onBiometricFailed();
+
+                // ── Lock signals ──
+                case 'BIOMETRIC_LOCKED':
+                  setState(() => _status = 'الجهاز متصل وينتظر التحقق الحيوي');
+                  appState.lockBiometricVault();
               }
             }
           } catch (_) {}
@@ -113,12 +132,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// [V2] Show add account dialog with targetUrl field
+  /// [V3] Show add account dialog with targetUrl, phone, and backup codes
   void _showAddAccountDialog() {
     final nameCtrl = TextEditingController();
     final userCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final backupCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -126,68 +147,152 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(40),
-        child: Container(
-          width: 480, padding: const EdgeInsets.all(28),
-          decoration: MarsTheme.glassCard(borderRadius: 24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              const Icon(Icons.person_add_alt_1, color: MarsTheme.success, size: 24),
-              const SizedBox(width: 10),
-              Text('إضافة حساب جديد', style: GoogleFonts.cairo(
-                color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700,
-              )),
-            ]),
-            const SizedBox(height: 20),
-            _inputField(nameCtrl, 'اسم الحساب', Icons.label),
-            const SizedBox(height: 12),
-            _inputField(userCtrl, 'اسم المستخدم', Icons.person),
-            const SizedBox(height: 12),
-            _inputField(passCtrl, 'كلمة المرور', Icons.lock, obscure: true),
-            const SizedBox(height: 12),
-            _inputField(urlCtrl, 'رابط الدخول التلقائي (URL)', Icons.link,
-              hint: 'https://example.com/login'),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: MarsTheme.success.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: MarsTheme.success.withOpacity(0.15)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.keyboard, color: MarsTheme.success, size: 16),
-                const SizedBox(width: 8),
-                Expanded(child: Text(
-                  'الرابط سيُستخدم في الدخول التلقائي (Rubber Ducky) من الجهاز مباشرة.',
-                  style: GoogleFonts.cairo(color: MarsTheme.success, fontSize: 10),
+        child: SingleChildScrollView(
+          child: Container(
+            width: 520,
+            padding: const EdgeInsets.all(28),
+            decoration: MarsTheme.glassCard(borderRadius: 24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // ── Header ──
+              Row(children: [
+                const Icon(Icons.person_add_alt_1, color: MarsTheme.success, size: 24),
+                const SizedBox(width: 10),
+                Text('إضافة حساب جديد', style: GoogleFonts.cairo(
+                  color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700,
                 )),
               ]),
-            ),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('إلغاء'),
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: ElevatedButton.icon(
-                icon: const Icon(Icons.send, size: 18),
-                label: const Text('إرسال للجهاز'),
-                onPressed: () {
-                  _sendCommand({
-                    'cmd': 'add_account',
-                    'name': nameCtrl.text,
-                    'username': userCtrl.text,
-                    'password': passCtrl.text,
-                    'targetUrl': urlCtrl.text,
-                  });
-                  Navigator.pop(ctx);
-                },
-              )),
+              const SizedBox(height: 20),
+
+              // ── Core fields ──
+              _inputField(nameCtrl, 'اسم الحساب', Icons.label),
+              const SizedBox(height: 12),
+              _inputField(userCtrl, 'اسم المستخدم', Icons.person),
+              const SizedBox(height: 12),
+              _inputField(passCtrl, 'كلمة المرور', Icons.lock, obscure: true),
+              const SizedBox(height: 16),
+
+              // ── Auto-Login URL (Rubber Ducky) ──
+              _buildSectionLabel(
+                'الدخول التلقائي (Rubber Ducky)',
+                Icons.keyboard_rounded,
+                MarsTheme.success,
+              ),
+              const SizedBox(height: 8),
+              _inputField(urlCtrl, 'رابط الدخول التلقائي (URL)', Icons.link,
+                hint: 'https://facebook.com/login'),
+              const SizedBox(height: 6),
+              _buildInfoBanner(
+                icon: Icons.keyboard,
+                color: MarsTheme.success,
+                text: 'الرابط سيُرسل إلى الجهاز ليقوم بفتحه تلقائياً عبر '
+                    'Keystroke Injection (Rubber Ducky) ثم يكتب بيانات الدخول.',
+              ),
+              const SizedBox(height: 16),
+
+              // ── Sensitive data section ──
+              _buildSectionLabel(
+                'بيانات حساسة (اختياري)',
+                Icons.shield_outlined,
+                MarsTheme.warning,
+              ),
+              const SizedBox(height: 8),
+              _inputField(phoneCtrl, 'أرقام الهاتف (فاصل: ,)', Icons.phone_android,
+                hint: '+213xxxxxxxxx, +1xxxxxxxxxx'),
+              const SizedBox(height: 10),
+              _inputField(backupCtrl, 'أكواد احتياطية (فاصل: ,)', Icons.vpn_key,
+                hint: 'XXXX-XXXX, YYYY-YYYY'),
+              const SizedBox(height: 6),
+              _buildInfoBanner(
+                icon: Icons.security,
+                color: MarsTheme.warning,
+                text: 'هذه البيانات تُشفَّر وتُخزَّن حصرياً على الجهاز. لن تظهر '
+                    'في التطبيق إلا بعد المصادقة بالبصمة.',
+              ),
+              const SizedBox(height: 20),
+
+              // ── Action buttons ──
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('إلغاء'),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: ElevatedButton.icon(
+                  icon: const Icon(Icons.send, size: 18),
+                  label: const Text('إرسال للجهاز'),
+                  onPressed: () {
+                    // Parse comma-separated lists
+                    final phones = _parseCommaSeparated(phoneCtrl.text);
+                    final codes = _parseCommaSeparated(backupCtrl.text);
+
+                    _sendCommand({
+                      'cmd': 'add_account',
+                      'name': nameCtrl.text,
+                      'username': userCtrl.text,
+                      'password': passCtrl.text,
+                      'targetUrl': urlCtrl.text,
+                      'phoneNumbers': phones,
+                      'backupCodes': codes,
+                    });
+                    Navigator.pop(ctx);
+                  },
+                )),
+              ]),
             ]),
-          ]),
+          ),
         ),
       ),
+    );
+  }
+
+  /// Parse a comma-separated string into a clean list
+  List<String> _parseCommaSeparated(String input) {
+    if (input.trim().isEmpty) return [];
+    return input
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  /// Section label widget for dialog organization
+  Widget _buildSectionLabel(String text, IconData icon, Color color) {
+    return Row(children: [
+      Icon(icon, color: color, size: 16),
+      const SizedBox(width: 8),
+      Text(text, style: GoogleFonts.cairo(
+        color: color, fontSize: 13, fontWeight: FontWeight.w700,
+      )),
+      const Spacer(),
+      Container(
+        height: 1,
+        width: 80,
+        color: color.withOpacity(0.15),
+      ),
+    ]);
+  }
+
+  /// Informational banner inside the dialog
+  Widget _buildInfoBanner({
+    required IconData icon,
+    required Color color,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Text(
+          text,
+          style: GoogleFonts.cairo(color: color, fontSize: 10, height: 1.6),
+        )),
+      ]),
     );
   }
 
