@@ -55,9 +55,19 @@ struct Account {
     String password;
     String targetUrl;   // [V2] Auto-login URL for Rubber Ducky payload
     String totpSecret;
+    String phoneNumber; // [V4] Bound phone number for 2FA recovery
+};
+
+// [V4] Phone Vault Entry — standalone encrypted phone number
+struct PhoneEntry {
+    int id;
+    String label;
+    String phoneNumber;
+    String notes;
 };
 
 std::vector<Account> accounts;
+std::vector<PhoneEntry> phoneEntries;
 
 enum MenuScreen {
     SCREEN_BOOT,
@@ -109,6 +119,8 @@ void encryptDataGCM(const String& plaintext, uint8_t* ciphertext, size_t& outLen
 String decryptDataGCM(const uint8_t* ciphertext, size_t len, uint8_t* iv, uint8_t* tag);
 void loadAccounts();
 void saveAccounts();
+void loadPhones();       // [V4] Phone vault persistence
+void savePhones();       // [V4] Phone vault persistence
 void clearRAM();
 void lockDevice();
 void unlockDevice(uint8_t fpID, String pin);
@@ -341,6 +353,7 @@ void loadAccounts() {
         loadField(prefix + "u", acc.username);
         loadField(prefix + "p", acc.password);
         loadField(prefix + "l", acc.targetUrl);  // [V2] Load targetUrl
+        loadField(prefix + "h", acc.phoneNumber); // [V4] Load phoneNumber
         
         if (acc.name != "") { // Only add if decryption succeeded
             accounts.push_back(acc);
@@ -368,6 +381,64 @@ void saveAccounts() {
         saveField(prefix + "u", accounts[i].username);
         saveField(prefix + "p", accounts[i].password);
         saveField(prefix + "l", accounts[i].targetUrl);  // [V2] Save targetUrl
+        saveField(prefix + "h", accounts[i].phoneNumber); // [V4] Save phoneNumber
+    }
+}
+
+// ==========================================
+// [V4] PHONE VAULT PERSISTENCE (NVS)
+// ==========================================
+void loadPhones() {
+    phoneEntries.clear();
+    int count = prefs.getInt("phone_count", 0);
+    
+    for (int i = 0; i < count; i++) {
+        String prefix = "ph" + String(i);
+        PhoneEntry pe;
+        pe.id = i;
+        
+        auto loadField = [&](const String& pfx, String& field) {
+            size_t cLen = prefs.getBytesLength((pfx + "_c").c_str());
+            if (cLen > 0) {
+                uint8_t c[cLen];
+                uint8_t iv[12];
+                uint8_t tag[16];
+                prefs.getBytes((pfx + "_c").c_str(), c, cLen);
+                prefs.getBytes((pfx + "_i").c_str(), iv, 12);
+                prefs.getBytes((pfx + "_t").c_str(), tag, 16);
+                field = decryptDataGCM(c, cLen, iv, tag);
+            }
+        };
+
+        loadField(prefix + "lb", pe.label);
+        loadField(prefix + "pn", pe.phoneNumber);
+        loadField(prefix + "nt", pe.notes);
+        
+        if (pe.phoneNumber != "") {
+            phoneEntries.push_back(pe);
+        }
+    }
+}
+
+void savePhones() {
+    prefs.putInt("phone_count", phoneEntries.size());
+    for (size_t i = 0; i < phoneEntries.size(); i++) {
+        String prefix = "ph" + String(i);
+        
+        auto saveField = [&](const String& pfx, const String& field) {
+            uint8_t c[256];
+            uint8_t iv[12];
+            uint8_t tag[16];
+            size_t len;
+            encryptDataGCM(field, c, len, iv, tag);
+            prefs.putBytes((pfx + "_c").c_str(), c, len);
+            prefs.putBytes((pfx + "_i").c_str(), iv, 12);
+            prefs.putBytes((pfx + "_t").c_str(), tag, 16);
+        };
+
+        saveField(prefix + "lb", phoneEntries[i].label);
+        saveField(prefix + "pn", phoneEntries[i].phoneNumber);
+        saveField(prefix + "nt", phoneEntries[i].notes);
     }
 }
 
@@ -377,8 +448,16 @@ void clearRAM() {
         acc.username = "";
         acc.password = "";
         acc.targetUrl = "";
+        acc.phoneNumber = "";
     }
     accounts.clear();
+    // [V4] Clear phone vault from RAM
+    for(auto& pe : phoneEntries) {
+        pe.label = "";
+        pe.phoneNumber = "";
+        pe.notes = "";
+    }
+    phoneEntries.clear();
     memset(derivedSessionKey, 0, 32); // Clear key from RAM
 }
 
@@ -404,9 +483,12 @@ void unlockDevice(uint8_t fpID, String pin) {
     finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_GREEN, 10);
     
     loadAccounts(); // Decrypt into RAM using derived key
+    loadPhones();   // [V4] Decrypt phone vault into RAM
     
     currentScreen = SCREEN_MAIN;
     selectedIndex = 0;
+    // [V4] Send both legacy and V3 signals for compatibility
+    Serial.println("{\"status\":\"event\",\"message\":\"FINGERPRINT_VERIFIED\"}");
     Serial.println("{\"status\":\"event\",\"message\":\"BIOMETRIC_UNLOCKED\"}");
     delay(500); 
     finger.LEDcontrol(FINGERPRINT_LED_OFF, 0, FINGERPRINT_LED_CYAN); 
@@ -746,6 +828,7 @@ void handleSerialCommands() {
             newAcc.username = doc["username"].as<String>();
             newAcc.password = doc["password"].as<String>();
             newAcc.targetUrl = doc["targetUrl"] | "";  // [V2] Optional auto-login URL
+            newAcc.phoneNumber = doc["phoneNumber"] | ""; // [V4] Optional phone number
             accounts.push_back(newAcc);
             saveAccounts();
             Serial.println("{\"status\":\"success\",\"message\":\"Account added securely (GCM)\"}");
@@ -780,6 +863,85 @@ void handleSerialCommands() {
              // Send raw NVM hex blobs to PC to be saved as .mahfadha
              // Implement logic to iterate NVM and send JSON array of hex blobs.
              Serial.println("{\"status\":\"success\",\"message\":\"Backup exported (Mock)\"}");
+        }
+        // ==========================================
+        // [V4] PHONE VAULT COMMANDS
+        // ==========================================
+        else if (command == "add_phone") {
+            if (!isUnlocked) {
+                Serial.println("{\"status\":\"error\",\"message\":\"Device is locked.\"}");
+                return;
+            }
+            PhoneEntry newPhone;
+            newPhone.id = phoneEntries.size();
+            newPhone.label = doc["label"].as<String>();
+            newPhone.phoneNumber = doc["phoneNumber"].as<String>();
+            newPhone.notes = doc["notes"] | "";
+            phoneEntries.push_back(newPhone);
+            savePhones();
+            Serial.println("{\"status\":\"success\",\"message\":\"Phone number stored securely (GCM)\"}");
+        }
+        else if (command == "delete_phone") {
+            if (!isUnlocked) {
+                Serial.println("{\"status\":\"error\",\"message\":\"Device is locked.\"}");
+                return;
+            }
+            int id = doc["id"].as<int>();
+            if (id >= 0 && id < (int)phoneEntries.size()) {
+                phoneEntries.erase(phoneEntries.begin() + id);
+                savePhones();
+                Serial.println("{\"status\":\"success\",\"message\":\"Phone number deleted\"}");
+            }
+        }
+        else if (command == "list_phones") {
+            if (!isUnlocked) {
+                Serial.println("{\"status\":\"error\",\"message\":\"Device is locked.\"}");
+                return;
+            }
+            JsonDocument res;
+            res["status"] = "success";
+            JsonArray arr = res["phones"].to<JsonArray>();
+            for (size_t i = 0; i < phoneEntries.size(); i++) {
+                JsonObject obj = arr.add<JsonObject>();
+                obj["id"] = (int)i;
+                obj["label"] = phoneEntries[i].label;
+            }
+            serializeJson(res, Serial);
+            Serial.println();
+        }
+        // ==========================================
+        // [V4] ARE_YOU_SETUP? — Enhanced handshake
+        // ==========================================
+        else if (command == "ARE_YOU_SETUP?") {
+            if (setupComplete && hasMasterFingerprint) {
+                Serial.println("{\"status\":\"SETUP_COMPLETE\"}");
+            } else {
+                Serial.println("{\"status\":\"NEEDS_SETUP\"}");
+            }
+        }
+        // ==========================================
+        // [V5] TELEMETRY & SHUTDOWN COMMANDS
+        // ==========================================
+        else if (command == "get_telemetry") {
+            // Mock hardware telemetry values
+            // In a real device, temperature would come from a thermistor or internal sensor
+            float mockTemp = random(35, 65); // Random temp between 35C and 65C for demo
+            float mockStorage = (float)accounts.size() / 100.0 * 100.0; // Assuming 100 is max capacity
+            float mockLoad = random(5, 30); // Random CPU load
+            
+            String telemetryStr = "TEMP:" + String(mockTemp) + "|STORAGE:" + String(mockStorage) + "|LOAD:" + String(mockLoad);
+            Serial.println("{\"status\":\"telemetry\",\"data\":\"" + telemetryStr + "\"}");
+        }
+        else if (command == "SHUTDOWN") {
+            Serial.println("{\"status\":\"success\",\"message\":\"Thermal emergency shutdown initiated.\"}");
+            lockDevice();
+            tft.fillScreen(TFT_RED);
+            tft.setTextColor(TFT_WHITE);
+            tft.setTextSize(2);
+            tft.setCursor(10, 50);
+            tft.println("THERMAL SHUTDOWN");
+            delay(1000);
+            esp_deep_sleep_start();
         }
     }
 }

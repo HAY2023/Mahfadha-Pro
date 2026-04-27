@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/app_state.dart';
 import '../services/github_updater_service.dart';
 import '../theme/mars_theme.dart';
 
@@ -294,7 +296,14 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
     return Row(
       children: [
         OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            try {
+              final appState = Provider.of<AppState>(context, listen: false);
+              appState.setCurrentPage(SidebarPage.home);
+            } catch (_) {
+              Navigator.of(context).pop();
+            }
+          },
           icon: const Icon(Icons.arrow_forward_rounded, size: 18),
           label: const Text('رجوع'),
         ),
@@ -403,7 +412,7 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
         const SizedBox(height: 10),
         _buildKeyValueRow(
           'الحزمة المعتمدة',
-          _releaseInfo?.appAsset.name ?? 'Mahfadha-Pro-Setup.exe',
+          _releaseInfo?.appAsset.name ?? 'CipherVaultPro_Setup.exe',
         ),
         const SizedBox(height: 16),
         _buildStatusPanel(

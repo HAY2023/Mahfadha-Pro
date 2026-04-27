@@ -1,8 +1,8 @@
-#define MyAppName "Mahfadha Pro"
+#define MyAppName "CipherVault Pro"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "HAY2023"
 #define MyAppURL "https://github.com/HAY2023/Mahfadha-Pro"
-#define MyAppExeName "MahfadhaPro.exe"
+#define MyAppExeName "CipherVaultPro.exe"
 
 [Setup]
 AppId={{B8A3D2F1-7E4C-4A9B-8F1D-2C5E6A7B8D9F}
@@ -14,7 +14,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\installer-output
-OutputBaseFilename=Mahfadha-Pro-Setup
+OutputBaseFilename=CipherVaultPro_Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

@@ -64,7 +64,7 @@ class VerifiedDownloadResult {
 ///  3. Immediate deletion of any file that fails checksum
 ///  4. Manifest-backed releases with pinned hashes
 ///  5. Secure temp directory isolation
-///  6. Self-update support (download MahfadhaPro.exe)
+///  6. Self-update support (download CipherVaultPro_Setup.exe)
 ///  7. Firmware OTA (download firmware.bin for ESP32 flash)
 /// ══════════════════════════════════════════════════════════════════════
 class GitHubUpdaterService {
@@ -89,9 +89,9 @@ class GitHubUpdaterService {
   static const String _manifestAssetName = 'latest.json';
 
   static const List<String> _appAssetCandidates = [
-    'Mahfadha-Pro-Setup.exe',
-    'MahfadhaPro.exe',
-    'Mahfadha-Pro-Windows.zip',
+    'CipherVaultPro_Setup.exe',
+    'CipherVaultPro.exe',
+    'CipherVault-Pro-Windows.zip',
   ];
 
   static const List<String> _firmwareAssetCandidates = [
@@ -579,7 +579,7 @@ class GitHubUpdaterService {
   Map<String, String> get _defaultHeaders => const {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'Mahfadha-Pro-Updater',
+        'User-Agent': 'CipherVault-Pro-Updater',
       };
 
   void dispose() {

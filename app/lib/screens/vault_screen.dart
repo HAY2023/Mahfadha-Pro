@@ -71,7 +71,7 @@ class _VaultScreenState extends State<VaultScreen>
   Widget _buildHeader(BuildContext context, AppState state) {
     return Row(children: [
       OutlinedButton.icon(
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: () => Provider.of<AppState>(context, listen: false).setCurrentPage(SidebarPage.home),
         icon: const Icon(Icons.arrow_forward_rounded, size: 18),
         label: const Text('رجوع'),
       ),
@@ -333,10 +333,10 @@ class _VaultScreenState extends State<VaultScreen>
             'الجهاز يتحقق من بصمتك الآن.';
       case BiometricState.failed:
         return 'البصمة غير مطابقة. أعد المحاولة بوضع إصبعك المسجّل\n'
-            'على مستشعر البصمة في جهاز Mahfadha Pro.';
+            'على مستشعر البصمة في وحدة التشفير المادية.';
       case BiometricState.waitingForFinger:
       case BiometricState.verified:
-        return 'ضع إصبعك على مستشعر البصمة في جهاز Mahfadha Pro.\n'
+        return 'ضع إصبعك على مستشعر البصمة في وحدة التشفير المادية.\n'
             'لن يتم فك تشفير أو عرض أي بيانات حتى تتم المصادقة.';
     }
   }

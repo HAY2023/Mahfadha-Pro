@@ -204,7 +204,7 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
           ),
         ),
         const SizedBox(height: 32),
-        Text('مرحباً بك في Mahfadha Pro', style: GoogleFonts.cairo(
+        Text('مرحباً بك في CipherVault Pro', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5,
         )),
         const SizedBox(height: 8),

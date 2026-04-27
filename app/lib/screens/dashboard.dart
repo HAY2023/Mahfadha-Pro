@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -20,6 +22,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   SerialPort? _port;
   String _status = 'غير متصل';
+  Timer? _telemetryTimer;
 
   @override
   void initState() {
@@ -47,42 +50,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _status = 'متصل عبر $portName — بانتظار المصادقة الحيوية';
         });
 
+        // ── [V5] Start polling telemetry ──
+        _telemetryTimer?.cancel();
+        _telemetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          _sendCommand({'cmd': 'get_telemetry'});
+        });
+
         final reader = SerialPortReader(_port!);
         reader.stream.listen((data) {
           try {
             final message = utf8.decode(data).trim();
             if (message.isEmpty) return;
 
-            final json = jsonDecode(message);
-            if (json['status'] == 'event') {
+            // Handle potential multiple JSON objects in one burst
+            final lines = message.split('\n');
+            for (final line in lines) {
+              if (line.isEmpty) continue;
+              final json = jsonDecode(line);
               final appState = context.read<AppState>();
-              final eventMessage = json['message']?.toString() ?? '';
+              
+              if (json['status'] == 'telemetry') {
+                final dataStr = json['data']?.toString() ?? '';
+                appState.processTelemetry(dataStr);
+                _checkThermalState(appState);
+              } 
+              else if (json['status'] == 'event') {
+                final eventMessage = json['message']?.toString() ?? '';
 
-              switch (eventMessage) {
-                // ── [V3] Primary signal: FINGERPRINT_VERIFIED from ESP32 ──
-                case 'FINGERPRINT_VERIFIED':
-                  setState(() => _status = 'تمت المصادقة الحيوية بنجاح ✓');
-                  appState.onFingerprintVerified();
-
-                // ── [V2] Legacy support: BIOMETRIC_UNLOCKED ──
-                case 'BIOMETRIC_UNLOCKED':
-                  setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
-                  appState.onBiometricUnlocked();
-
-                // ── [V3] Scanning in progress ──
-                case 'FINGERPRINT_SCANNING':
-                  setState(() => _status = 'جارٍ مسح البصمة...');
-                  appState.onBiometricScanning();
-
-                // ── [V3] Verification failed ──
-                case 'FINGERPRINT_FAILED':
-                  setState(() => _status = 'فشل التحقق من البصمة');
-                  appState.onBiometricFailed();
-
-                // ── Lock signals ──
-                case 'BIOMETRIC_LOCKED':
-                  setState(() => _status = 'الجهاز متصل وينتظر التحقق الحيوي');
-                  appState.lockBiometricVault();
+                switch (eventMessage) {
+                  case 'FINGERPRINT_VERIFIED':
+                    setState(() => _status = 'تمت المصادقة الحيوية بنجاح ✓');
+                    appState.onFingerprintVerified();
+                    break;
+                  case 'BIOMETRIC_UNLOCKED':
+                    setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
+                    appState.onBiometricUnlocked();
+                    break;
+                  case 'FINGERPRINT_SCANNING':
+                    setState(() => _status = 'جارٍ مسح البصمة...');
+                    appState.onBiometricScanning();
+                    break;
+                  case 'FINGERPRINT_FAILED':
+                    setState(() => _status = 'فشل التحقق من البصمة');
+                    appState.onBiometricFailed();
+                    break;
+                  case 'BIOMETRIC_LOCKED':
+                    setState(() => _status = 'وحدة التشفير متصلة وتنتظر التحقق الحيوي');
+                    appState.lockBiometricVault();
+                    break;
+                }
               }
             }
           } catch (_) {}
@@ -95,20 +111,83 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _checkThermalState(AppState state) {
+    if (state.isThermalEmergency) {
+      _telemetryTimer?.cancel();
+      _showThermalAlert();
+      _sendCommand({'cmd': 'SHUTDOWN'});
+      
+      // Disconnect and route to ConnectionGate
+      Future.delayed(const Duration(seconds: 4), () {
+        if (_port?.isOpen ?? false) {
+          _port!.close();
+        }
+        state.fullReset();
+        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
+      });
+    }
+  }
+
+  void _showThermalAlert() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.8),
+      builder: (ctx) => Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: MarsTheme.error.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: MarsTheme.error, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: MarsTheme.error.withOpacity(0.3),
+                    blurRadius: 100,
+                    spreadRadius: 10,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.warning_rounded, color: MarsTheme.error, size: 80),
+                      const SizedBox(height: 20),
+                      Text('!! تحذير حراري حرج !!', style: GoogleFonts.cairo(
+                        color: MarsTheme.error, fontSize: 32, fontWeight: FontWeight.bold,
+                      )),
+                      const SizedBox(height: 16),
+                      Text('درجة حرارة وحدة التشفير مرتفعة جداً (60°C أو أعلى). سيتم إيقاف التشغيل فوراً لحماية بياناتك ولتجنب تلف العتاد المادي.', 
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.cairo(
+                        color: MarsTheme.textPrimary, fontSize: 16, height: 1.5,
+                      )),
+                      const SizedBox(height: 24),
+                      CircularProgressIndicator(color: MarsTheme.error),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _sendCommand(Map<String, dynamic> command) {
     if (_port == null || !_port!.isOpen) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'وصّل جهاز Mahfadha Pro أولاً.',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
-          ),
-          backgroundColor: MarsTheme.error,
-        ),
-      );
       return;
     }
-
     try {
       final payload = '${jsonEncode(command)}\n';
       _port!.write(Uint8List.fromList(utf8.encode(payload)));
@@ -132,7 +211,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// [V3] Show add account dialog with targetUrl, phone, and backup codes
   void _showAddAccountDialog() {
     final nameCtrl = TextEditingController();
     final userCtrl = TextEditingController();
@@ -196,7 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MarsTheme.warning,
               ),
               const SizedBox(height: 8),
-              _inputField(phoneCtrl, 'أرقام الهاتف (فاصل: ,)', Icons.phone_android,
+              _inputField(phoneCtrl, 'جهات الاتصال الآمنة (فاصل: ,)', Icons.phone_android,
                 hint: '+213xxxxxxxxx, +1xxxxxxxxxx'),
               const SizedBox(height: 10),
               _inputField(backupCtrl, 'أكواد احتياطية (فاصل: ,)', Icons.vpn_key,
@@ -205,8 +283,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildInfoBanner(
                 icon: Icons.security,
                 color: MarsTheme.warning,
-                text: 'هذه البيانات تُشفَّر وتُخزَّن حصرياً على الجهاز. لن تظهر '
-                    'في التطبيق إلا بعد المصادقة بالبصمة.',
+                text: 'هذه البيانات تُشفَّر وتُخزَّن حصرياً على وحدة التشفير المادية. لن تظهر '
+                    'في التطبيق إلا بعد المصادقة الحيوية.',
               ),
               const SizedBox(height: 20),
 
@@ -219,9 +297,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 12),
                 Expanded(child: ElevatedButton.icon(
                   icon: const Icon(Icons.send, size: 18),
-                  label: const Text('إرسال للجهاز'),
+                  label: const Text('تشفير وإرسال'),
                   onPressed: () {
-                    // Parse comma-separated lists
                     final phones = _parseCommaSeparated(phoneCtrl.text);
                     final codes = _parseCommaSeparated(backupCtrl.text);
 
@@ -245,7 +322,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Parse a comma-separated string into a clean list
   List<String> _parseCommaSeparated(String input) {
     if (input.trim().isEmpty) return [];
     return input
@@ -255,7 +331,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .toList();
   }
 
-  /// Section label widget for dialog organization
   Widget _buildSectionLabel(String text, IconData icon, Color color) {
     return Row(children: [
       Icon(icon, color: color, size: 16),
@@ -272,7 +347,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]);
   }
 
-  /// Informational banner inside the dialog
   Widget _buildInfoBanner({
     required IconData icon,
     required Color color,
@@ -328,6 +402,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _telemetryTimer?.cancel();
     if (_port?.isOpen ?? false) {
       _port!.close();
     }
@@ -339,7 +414,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final connected = _status.contains('متصل') || _status.contains('المصادقة');
 
     return Container(
-      decoration: const BoxDecoration(gradient: MarsTheme.backgroundGradient),
+      decoration: const BoxDecoration(color: Colors.transparent),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
         child: Column(
@@ -349,6 +424,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: Column(
                 children: [
+                  // ── [V5] Telemetry Monitor ──
+                  Consumer<AppState>(
+                    builder: (context, state, _) {
+                      return _buildPerformanceMonitor(state);
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   Expanded(
                     child: Container(
                       decoration: MarsTheme.glassCard(borderRadius: 24),
@@ -356,7 +438,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('عمليات الجهاز', style: GoogleFonts.cairo(
+                          Text('عمليات وحدة التشفير المادية', style: GoogleFonts.cairo(
                             color: MarsTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w700,
                           )),
                           const SizedBox(height: 18),
@@ -376,6 +458,129 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildPerformanceMonitor(AppState state) {
+    return Container(
+      decoration: MarsTheme.glassCard(borderRadius: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.speed_rounded, color: MarsTheme.cyanNeon, size: 20),
+              const SizedBox(width: 8),
+              Text('حالة وحدة التشفير', style: GoogleFonts.cairo(
+                color: MarsTheme.cyanNeon, fontSize: 16, fontWeight: FontWeight.bold,
+              )),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildGauge(
+                label: 'درجة الحرارة',
+                value: state.temperature,
+                maxValue: 80.0,
+                unit: '°C',
+                icon: Icons.thermostat_rounded,
+                isTemperature: true,
+              ),
+              _buildGauge(
+                label: 'المساحة المتوفرة',
+                value: 100.0 - state.storageUsed,
+                maxValue: 100.0,
+                unit: '%',
+                icon: Icons.storage_rounded,
+                color: MarsTheme.cyanNeon,
+              ),
+              _buildGauge(
+                label: 'استقرار النظام',
+                value: state.systemLoad,
+                maxValue: 100.0,
+                unit: '%',
+                icon: Icons.memory_rounded,
+                color: MarsTheme.accent,
+                invertColor: true, // Lower is better
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGauge({
+    required String label,
+    required double value,
+    required double maxValue,
+    required String unit,
+    required IconData icon,
+    Color? color,
+    bool isTemperature = false,
+    bool invertColor = false,
+  }) {
+    Color gaugeColor = color ?? MarsTheme.success;
+    
+    if (isTemperature) {
+      if (value < 40) gaugeColor = MarsTheme.success;
+      else if (value < 55) gaugeColor = MarsTheme.warning;
+      else gaugeColor = MarsTheme.error;
+    } else if (invertColor) {
+      if (value > 80) gaugeColor = MarsTheme.error;
+      else if (value > 60) gaugeColor = MarsTheme.warning;
+      else gaugeColor = MarsTheme.success;
+    }
+
+    final double percentage = (value / maxValue).clamp(0.0, 1.0);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 70,
+              height: 70,
+              child: CircularProgressIndicator(
+                value: percentage,
+                strokeWidth: 6,
+                backgroundColor: gaugeColor.withOpacity(0.1),
+                color: gaugeColor,
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: gaugeColor, size: 16),
+                const SizedBox(height: 2),
+                Text(
+                  '${value.toStringAsFixed(1)}$unit',
+                  style: GoogleFonts.firaCode(
+                    color: MarsTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            color: MarsTheme.textMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildHeader(bool connected) {
     return Row(
       children: [
@@ -389,13 +594,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 18),
             const SizedBox(width: 8),
-            Text('Mahfadha Pro', style: GoogleFonts.inter(
+            Text('CipherVault Pro', style: GoogleFonts.inter(
               color: MarsTheme.cyanNeon, fontSize: 13, fontWeight: FontWeight.w700,
             )),
           ]),
         ),
         const SizedBox(width: 12),
-        Text('لوحة التشغيل الآمنة', style: GoogleFonts.cairo(
+        Text('لوحة التحكم', style: GoogleFonts.cairo(
           color: MarsTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700,
         )),
         const Spacer(),
@@ -445,28 +650,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onTap: _showAddAccountDialog,
             ),
             _operationCard(
-              icon: Icons.shield_rounded, label: 'القبو الحساس',
+              icon: Icons.shield_rounded, label: 'خزنة صفرية المعرفة',
               color: const Color(0xFFE879F9),
-              onTap: () => Navigator.pushNamed(context, '/vault'),
+              onTap: () => context.read<AppState>().setCurrentPage(SidebarPage.accounts),
             ),
             _operationCard(
-              icon: Icons.list_alt_rounded, label: 'عرض السجلات',
+              icon: Icons.list_alt_rounded, label: 'سجل الحسابات',
               color: MarsTheme.accent,
               onTap: () => _sendCommand({'cmd': 'list_accounts'}),
             ),
             _operationCard(
-              icon: Icons.upload_file_rounded, label: 'استيراد CSV',
+              icon: Icons.upload_file_rounded, label: 'استيراد السجلات',
               color: MarsTheme.warning, onTap: _openCsvImporter,
             ),
             _operationCard(
-              icon: Icons.download_done_rounded, label: 'نسخة احتياطية',
+              icon: Icons.download_done_rounded, label: 'نسخة احتياطية مشفرة',
               color: const Color(0xFF2DD4BF),
               onTap: () => _sendCommand({'cmd': 'export_backup'}),
             ),
             _operationCard(
-              icon: Icons.refresh_rounded, label: 'مركز التحديثات',
+              icon: Icons.refresh_rounded, label: 'تحديث النظام',
               color: MarsTheme.cyanGlow,
-              onTap: () => Navigator.pushNamed(context, '/updates'),
+              onTap: () => context.read<AppState>().setCurrentPage(SidebarPage.updates),
             ),
             _operationCard(
               icon: Icons.delete_sweep_rounded, label: 'إعادة ضبط المصنع',

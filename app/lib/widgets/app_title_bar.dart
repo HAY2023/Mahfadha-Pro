@@ -4,33 +4,53 @@ import 'package:window_manager/window_manager.dart';
 
 import '../theme/mars_theme.dart';
 
-/// Custom title bar using [WindowCaption] from window_manager for proper
-/// borderless window drag, minimize, and tray-hide behavior.
+/// ══════════════════════════════════════════════════════════════════════
+///  Custom Title Bar — [V4 FIX] Proper Stack layout ensuring:
+///  1. Window dragging works on the ENTIRE title bar area
+///  2. Minimize/Close buttons are ALWAYS clickable (on top of drag area)
+///  3. Branding is visible but does not intercept drag events
+/// ══════════════════════════════════════════════════════════════════════
 class AppTitleBar extends StatelessWidget {
   const AppTitleBar({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 42,
-      decoration: BoxDecoration(
-        color: MarsTheme.spaceNavy,
-        border: Border(
-          bottom: BorderSide(
-            color: MarsTheme.cyanNeon.withOpacity(0.08),
-            width: 1,
-          ),
-        ),
-      ),
       child: Stack(
         children: [
-          // ── WindowCaption: system-level drag + double-click maximize ──
-          const WindowCaption(
-            brightness: Brightness.dark,
-            title: null, // We render our own branding below
+          // ── Layer 0: Background decoration ──
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: MarsTheme.spaceNavy,
+                border: Border(
+                  bottom: BorderSide(
+                    color: MarsTheme.cyanNeon.withOpacity(0.08),
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
           ),
 
-          // ── Branding overlay (left side) ──
+          // ── Layer 1: Full-width drag area (GestureDetector) ──
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onPanStart: (_) => windowManager.startDragging(),
+              onDoubleTap: () async {
+                if (await windowManager.isMaximized()) {
+                  await windowManager.unmaximize();
+                } else {
+                  await windowManager.maximize();
+                }
+              },
+              child: const SizedBox.expand(),
+            ),
+          ),
+
+          // ── Layer 2: Branding (left side, non-interactive) ──
           Positioned.fill(
             child: IgnorePointer(
               child: Padding(
@@ -44,7 +64,7 @@ class AppTitleBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Mahfadha Pro',
+                      'CipherVault Pro',
                       style: GoogleFonts.inter(
                         color: MarsTheme.cyanNeon,
                         fontSize: 12,
@@ -80,7 +100,7 @@ class AppTitleBar extends StatelessWidget {
             ),
           ),
 
-          // ── Custom window control buttons (right side) ──
+          // ── Layer 3: Window control buttons (right side, CLICKABLE) ──
           Positioned(
             top: 0,
             bottom: 0,

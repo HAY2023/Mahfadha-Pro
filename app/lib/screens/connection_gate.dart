@@ -32,7 +32,7 @@ class ConnectionGateScreen extends StatefulWidget {
 class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     with TickerProviderStateMixin {
   _GatePhase _phase = _GatePhase.scanning;
-  String _statusText = 'جارٍ التحقق من اتصال جهاز Mahfadha Pro عبر USB.';
+  String _statusText = 'جارٍ التحقق من اتصال وحدة التشفير المادية عبر USB.';
   String? _connectedPort;
   List<String> _availablePorts = [];
   Timer? _scanTimer;
@@ -171,7 +171,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
         setState(() {
           _phase = _GatePhase.connected;
           _connectedPort = portName;
-          _statusText = 'تم اعتماد جهاز Mahfadha Pro وهو جاهز للدخول.';
+          _statusText = 'تم اعتماد وحدة التشفير المادية وهي جاهزة للدخول.';
         });
 
         appState.setDeviceConnected(true);
@@ -518,7 +518,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
               ),
               const SizedBox(width: 8),
               Text(
-                'جهاز Mahfadha Pro',
+                'وحدة التشفير المادية',
                 style: GoogleFonts.cairo(
                   color: const Color(0xFF00FFFF),
                   fontSize: 12,
@@ -735,7 +735,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   String get _phaseTitle {
     switch (_phase) {
       case _GatePhase.scanning:
-        return 'التحقق من جهاز Mahfadha Pro';
+        return 'التحقق من وحدة التشفير المادية';
       case _GatePhase.handshaking:
         return 'جارٍ اعتماد قناة الاتصال';
       case _GatePhase.connected:

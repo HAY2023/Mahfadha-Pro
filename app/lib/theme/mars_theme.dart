@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Mahfadha Pro — نظام التصميم المريخي الفخم
+/// CipherVault Pro — نظام التصميم المريخي الفخم
 /// كحلي فضائي داكن + نيون سيان + زجاج لامع (Glassmorphism)
 class MarsTheme {
   MarsTheme._();

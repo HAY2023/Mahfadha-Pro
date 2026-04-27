@@ -8,7 +8,8 @@ import 'package:flutter/material.dart';
 ///  [V2] Biometric-Gated Vault + Sensitive Profile Vault + Auto-Login URL
 ///  [V3] Expanded data model: phoneNumbers, backupCodes, recoveryEmails
 ///       + FINGERPRINT_VERIFIED signal support from ESP32
-///  [V4] Phone Vault + Auto-Save Interceptor + Sidebar Navigation
+///  [V4] Secure Contacts Vault + Auto-Save Interceptor + Sidebar Navigation
+///  [V5] CipherVault Pro Enterprise UI + Live Performance Telemetry
 /// ══════════════════════════════════════════════════════════════════════
 
 /// Sensitive profile entry — phone numbers, recovery emails, backup codes, etc.
@@ -263,6 +264,14 @@ class AppState extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════
   InterceptedCredential? _pendingCredential;
 
+  // ══════════════════════════════════════════════════════════════
+  //  [V5] Telemetry & Thermal State
+  // ══════════════════════════════════════════════════════════════
+  double _temperature = 0.0;
+  double _storageUsed = 0.0;
+  double _systemLoad = 0.0;
+  bool _isThermalEmergency = false;
+
   // ── Getters ──
   bool get isDeviceConnected => _isDeviceConnected;
   bool get isSetupComplete => _isSetupComplete;
@@ -270,6 +279,12 @@ class AppState extends ChangeNotifier {
   String? get connectedPort => _connectedPort;
   List<Map<String, dynamic>> get tempPasswords =>
       List.unmodifiable(_tempPasswords);
+
+  // ── [V5] Telemetry Getters ──
+  double get temperature => _temperature;
+  double get storageUsed => _storageUsed;
+  double get systemLoad => _systemLoad;
+  bool get isThermalEmergency => _isThermalEmergency;
 
   // ── [V2/V3] Biometric Vault Getters ──
   bool get isBiometricUnlocked => _isBiometricUnlocked;
@@ -318,6 +333,48 @@ class AppState extends ChangeNotifier {
 
   void updateStatus(String status) {
     _deviceStatus = status;
+    notifyListeners();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  [V5] Hardware Telemetry Parsing
+  // ══════════════════════════════════════════════════════════════
+  void processTelemetry(String telemetryStr) {
+    // Expected format: TEMP:55|STORAGE:80|LOAD:10
+    try {
+      final parts = telemetryStr.split('|');
+      for (final part in parts) {
+        final kv = part.split(':');
+        if (kv.length == 2) {
+          final key = kv[0];
+          final val = double.tryParse(kv[1]) ?? 0.0;
+          if (key == 'TEMP') {
+            _temperature = val;
+            if (_temperature >= 60.0 && !_isThermalEmergency) {
+              _triggerThermalEmergency();
+            } else if (_temperature < 60.0 && _isThermalEmergency) {
+              _isThermalEmergency = false; // Recovered (though usually we shut down)
+            }
+          } else if (key == 'STORAGE') {
+            _storageUsed = val;
+          } else if (key == 'LOAD') {
+            _systemLoad = val;
+          }
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[🛡️ أمان] Telemetry parse error: $e');
+    }
+  }
+
+  void _triggerThermalEmergency() {
+    _isThermalEmergency = true;
+    notifyListeners();
+  }
+
+  void resetThermalEmergency() {
+    _isThermalEmergency = false;
     notifyListeners();
   }
 
