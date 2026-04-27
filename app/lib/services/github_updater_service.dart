@@ -231,6 +231,9 @@ class GitHubUpdaterService {
     final actualHash = await _calculateSha256(targetFile);
     final expectedHash = asset.sha256Hash.toLowerCase();
 
+    // Military-Grade Audit Log
+    print('[🛡️ SECURITY] Verifying OTA Payload SHA-256...\nExpected: $expectedHash\nActual:   $actualHash');
+
     if (actualHash != expectedHash) {
       // IMMEDIATE DESTRUCTION — compromised file
       if (await targetFile.exists()) {

@@ -216,6 +216,7 @@ class AppState extends ChangeNotifier {
     _vaultAccounts.clear();
     // Scrub global sensitive entries
     _globalSensitiveEntries.clear();
+    // Optional: Force Garbage Collection prompt if possible, or clear references
     notifyListeners();
     debugPrint('[🛡️ أمان] تم قفل القبو — جميع البيانات الحساسة مُحيت من الذاكرة.');
   }

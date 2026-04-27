@@ -119,6 +119,7 @@ int getBatteryPercentage();
 void drawBootScreen();
 void checkFirstTimeSetup();
 void handleSetupSerial(JsonDocument& doc, const String& command);
+void executeRubberDuckyPayload(const Account& acc);
 
 // ==========================================
 // SETUP
@@ -609,6 +610,35 @@ void handleEncoderAndFingerprint() {
         drawMenu();
     }
     lastSwState = swState;
+}
+
+// ==========================================
+// RUBBER DUCKY / BADUSB PAYLOAD INJECTION
+// ==========================================
+void executeRubberDuckyPayload(const Account& acc) {
+    // 1. Open Run Dialog (GUI + R)
+    Keyboard.press(KEY_LEFT_GUI);
+    Keyboard.press('r');
+    delay(100);
+    Keyboard.releaseAll();
+    delay(500); // Wait for Windows Run dialog
+
+    // 2. Type targetUrl and hit ENTER
+    Keyboard.print(acc.targetUrl);
+    delay(100);
+    Keyboard.write(KEY_RETURN);
+    
+    // 3. Delay for browser to open (Adjustable based on target PC speed)
+    delay(1000); 
+
+    // 4. Type username -> TAB -> Type password -> ENTER
+    Keyboard.print(acc.username);
+    delay(100);
+    Keyboard.write(KEY_TAB);
+    delay(100);
+    Keyboard.print(acc.password);
+    delay(100);
+    Keyboard.write(KEY_RETURN);
 }
 
 // ==========================================
