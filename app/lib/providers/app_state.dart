@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 ///  [V2] Biometric-Gated Vault + Sensitive Profile Vault + Auto-Login URL
 ///  [V3] Expanded data model: phoneNumbers, backupCodes, recoveryEmails
 ///       + FINGERPRINT_VERIFIED signal support from ESP32
+///  [V4] Phone Vault + Auto-Save Interceptor + Sidebar Navigation
 /// ══════════════════════════════════════════════════════════════════════
 
 /// Sensitive profile entry — phone numbers, recovery emails, backup codes, etc.
@@ -140,6 +141,58 @@ List<String> _parseStringList(dynamic value) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+//  [V4] Phone Vault Entry — standalone encrypted phone number store
+// ══════════════════════════════════════════════════════════════════════════
+
+class PhoneVaultEntry {
+  final int id;
+  final String label;       // e.g. "هاتفي الرئيسي", "واتساب", "2FA Google"
+  final String phoneNumber; // The encrypted phone number
+  final String notes;       // Optional notes
+
+  const PhoneVaultEntry({
+    required this.id,
+    required this.label,
+    required this.phoneNumber,
+    this.notes = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'label': label,
+    'phoneNumber': phoneNumber,
+    'notes': notes,
+  };
+
+  factory PhoneVaultEntry.fromJson(Map<String, dynamic> json) {
+    return PhoneVaultEntry(
+      id: json['id'] as int? ?? 0,
+      label: json['label']?.toString() ?? '',
+      phoneNumber: json['phoneNumber']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  [V4] Auto-Save Interceptor — intercepted credentials from browser
+// ══════════════════════════════════════════════════════════════════════════
+
+class InterceptedCredential {
+  final String targetUrl;
+  final String username;
+  final String password;
+  final DateTime interceptedAt;
+
+  const InterceptedCredential({
+    required this.targetUrl,
+    required this.username,
+    required this.password,
+    required this.interceptedAt,
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 //  Biometric verification state — tracks the ESP32 fingerprint flow
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -156,6 +209,18 @@ enum BiometricState {
 
   /// Fingerprint verification failed
   failed,
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  [V4] Sidebar Navigation Index
+// ══════════════════════════════════════════════════════════════════════════
+
+enum SidebarPage {
+  home,        // الرئيسية
+  accounts,    // الحسابات
+  phones,      // أرقام الهاتف
+  updates,     // مركز التحديثات
+  settings,    // الإعدادات
 }
 
 class AppState extends ChangeNotifier {
@@ -183,6 +248,21 @@ class AppState extends ChangeNotifier {
   /// Standalone sensitive profiles (not tied to a specific account)
   List<SensitiveProfileEntry> _globalSensitiveEntries = [];
 
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Phone Vault State
+  // ══════════════════════════════════════════════════════════════
+  List<PhoneVaultEntry> _phoneVault = [];
+
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Sidebar Navigation
+  // ══════════════════════════════════════════════════════════════
+  SidebarPage _currentPage = SidebarPage.home;
+
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Auto-Save Interceptor
+  // ══════════════════════════════════════════════════════════════
+  InterceptedCredential? _pendingCredential;
+
   // ── Getters ──
   bool get isDeviceConnected => _isDeviceConnected;
   bool get isSetupComplete => _isSetupComplete;
@@ -207,6 +287,18 @@ class AppState extends ChangeNotifier {
     if (!_isBiometricUnlocked) return const [];
     return List.unmodifiable(_globalSensitiveEntries);
   }
+
+  // ── [V4] Phone Vault Getters ──
+  List<PhoneVaultEntry> get phoneVault {
+    if (!_isBiometricUnlocked) return const [];
+    return List.unmodifiable(_phoneVault);
+  }
+
+  // ── [V4] Sidebar Getters ──
+  SidebarPage get currentPage => _currentPage;
+
+  // ── [V4] Auto-Save Interceptor Getters ──
+  InterceptedCredential? get pendingCredential => _pendingCredential;
 
   // ── اتصال الجهاز ──
   void setDeviceConnected(bool connected) {
@@ -254,6 +346,15 @@ class AppState extends ChangeNotifier {
     _tempPasswords.clear();
     notifyListeners();
     debugPrint('[🛡️ أمان] تم مسح كلمات المرور من الذاكرة.');
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Sidebar Navigation
+  // ══════════════════════════════════════════════════════════════
+
+  void setCurrentPage(SidebarPage page) {
+    _currentPage = page;
+    notifyListeners();
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -308,6 +409,8 @@ class AppState extends ChangeNotifier {
     _vaultAccounts.clear();
     // Scrub global sensitive entries
     _globalSensitiveEntries.clear();
+    // Scrub phone vault
+    _phoneVault.clear();
     // Optional: Force Garbage Collection prompt if possible, or clear references
     notifyListeners();
     debugPrint('[🛡️ أمان] تم قفل القبو — جميع البيانات الحساسة مُحيت من الذاكرة.');
@@ -350,12 +453,50 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Phone Vault Operations
+  // ══════════════════════════════════════════════════════════════
+
+  void setPhoneVault(List<PhoneVaultEntry> entries) {
+    if (!_isBiometricUnlocked) return;
+    _phoneVault = List.from(entries);
+    notifyListeners();
+  }
+
+  void addPhoneVaultEntry(PhoneVaultEntry entry) {
+    if (!_isBiometricUnlocked) return;
+    _phoneVault.add(entry);
+    notifyListeners();
+  }
+
+  void removePhoneVaultEntry(int id) {
+    if (!_isBiometricUnlocked) return;
+    _phoneVault.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  [V4] Auto-Save Interceptor
+  // ══════════════════════════════════════════════════════════════
+
+  void setPendingCredential(InterceptedCredential? credential) {
+    _pendingCredential = credential;
+    notifyListeners();
+  }
+
+  void clearPendingCredential() {
+    _pendingCredential = null;
+    notifyListeners();
+  }
+
   /// إعادة ضبط كاملة — مسح كل شيء (عند القفل التلقائي أو فصل الجهاز)
   void fullReset() {
     _isDeviceConnected = false;
     _isSetupComplete = false;
     _deviceStatus = 'غير متصل';
     _connectedPort = null;
+    _currentPage = SidebarPage.home;
+    _pendingCredential = null;
     clearPasswords();
     lockBiometricVault();
     debugPrint('[🛡️ أمان] إعادة ضبط كاملة — كل البيانات مُحيت.');
