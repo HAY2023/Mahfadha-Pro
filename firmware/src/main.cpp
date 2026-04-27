@@ -53,6 +53,7 @@ struct Account {
     String name;
     String username;
     String password;
+    String targetUrl;   // [V2] Auto-login URL for Rubber Ducky payload
     String totpSecret;
 };
 
@@ -68,6 +69,7 @@ enum MenuScreen {
     SCREEN_MAIN,
     SCREEN_PASSWORDS,
     SCREEN_PASSWORD_ACTIONS,
+    SCREEN_AUTO_LOGIN,    // [V2] Rubber Ducky auto-login execution
     SCREEN_SETTINGS,
     SCREEN_VERIFY_IDENTITY,
     SCREEN_SEED_VAULT,
@@ -336,6 +338,7 @@ void loadAccounts() {
         loadField(prefix + "n", acc.name);
         loadField(prefix + "u", acc.username);
         loadField(prefix + "p", acc.password);
+        loadField(prefix + "l", acc.targetUrl);  // [V2] Load targetUrl
         
         if (acc.name != "") { // Only add if decryption succeeded
             accounts.push_back(acc);
@@ -362,6 +365,7 @@ void saveAccounts() {
         saveField(prefix + "n", accounts[i].name);
         saveField(prefix + "u", accounts[i].username);
         saveField(prefix + "p", accounts[i].password);
+        saveField(prefix + "l", accounts[i].targetUrl);  // [V2] Save targetUrl
     }
 }
 
@@ -370,6 +374,7 @@ void clearRAM() {
         acc.name = "";
         acc.username = "";
         acc.password = "";
+        acc.targetUrl = "";
     }
     accounts.clear();
     memset(derivedSessionKey, 0, 32); // Clear key from RAM
@@ -576,12 +581,25 @@ void handleEncoderAndFingerprint() {
             if (menuScrollOffset == 0) Keyboard.print(acc.username);
             else if (menuScrollOffset == 1) Keyboard.print(acc.password);
             else if (menuScrollOffset == 2) {
+                // [V2] Simple Auto-Login: Tab between fields
                 Keyboard.print(acc.username);
                 Keyboard.write(KEY_TAB);
                 delay(100);
                 Keyboard.print(acc.password);
                 Keyboard.write(KEY_RETURN);
             } else if (menuScrollOffset == 3) {
+                // [V2] RUBBER DUCKY AUTO-LOGIN — Full keystroke injection
+                if (acc.targetUrl.length() > 0) {
+                    executeRubberDuckyPayload(acc);
+                } else {
+                    // No URL configured — fall back to simple auto-login
+                    Keyboard.print(acc.username);
+                    Keyboard.write(KEY_TAB);
+                    delay(100);
+                    Keyboard.print(acc.password);
+                    Keyboard.write(KEY_RETURN);
+                }
+            } else if (menuScrollOffset == 4) {
                 currentScreen = SCREEN_PASSWORDS;
             }
         } else if (currentScreen == SCREEN_SEED_VAULT || currentScreen == SCREEN_FIDO2 || currentScreen == SCREEN_SETTINGS) {
@@ -662,6 +680,7 @@ void handleSerialCommands() {
             newAcc.name = doc["name"].as<String>();
             newAcc.username = doc["username"].as<String>();
             newAcc.password = doc["password"].as<String>();
+            newAcc.targetUrl = doc["targetUrl"] | "";  // [V2] Optional auto-login URL
             accounts.push_back(newAcc);
             saveAccounts();
             Serial.println("{\"status\":\"success\",\"message\":\"Account added securely (GCM)\"}");

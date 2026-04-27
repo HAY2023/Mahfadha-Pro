@@ -55,6 +55,18 @@ class VerifiedDownloadResult {
   });
 }
 
+/// ══════════════════════════════════════════════════════════════════════
+///  GitHub Releases OTA — Military-Grade Update Service
+///
+///  Security measures:
+///  1. HTTPS-only connections to trusted GitHub domains
+///  2. SHA-256 checksum verification on ALL downloaded files
+///  3. Immediate deletion of any file that fails checksum
+///  4. Manifest-backed releases with pinned hashes
+///  5. Secure temp directory isolation
+///  6. Self-update support (download MahfadhaPro.exe)
+///  7. Firmware OTA (download firmware.bin for ESP32 flash)
+/// ══════════════════════════════════════════════════════════════════════
 class GitHubUpdaterService {
   GitHubUpdaterService({
     required this.owner,
@@ -91,6 +103,9 @@ class GitHubUpdaterService {
         '/repos/$owner/$repository/releases/latest',
       );
 
+  /// ──────────────────────────────────────────────────────────────────
+  ///  Fetch latest release metadata from GitHub API
+  /// ──────────────────────────────────────────────────────────────────
   Future<GitHubReleaseInfo> fetchLatestRelease() async {
     _assertTrustedUri(_latestReleaseUri);
 
@@ -153,6 +168,10 @@ class GitHubUpdaterService {
     );
   }
 
+  /// ──────────────────────────────────────────────────────────────────
+  ///  Download asset with progress tracking + SHA-256 verification
+  ///  MILITARY-GRADE: File is deleted immediately if hash mismatch
+  /// ──────────────────────────────────────────────────────────────────
   Future<VerifiedDownloadResult> downloadAndVerifyAsset({
     required GitHubReleaseAsset asset,
     DownloadProgressCallback? onProgress,
@@ -208,20 +227,52 @@ class GitHubUpdaterService {
     onProgress?.call(100.0);
     onVerificationStart?.call();
 
+    // ── MILITARY-GRADE SHA-256 CHECKSUM ──
     final actualHash = await _calculateSha256(targetFile);
     final expectedHash = asset.sha256Hash.toLowerCase();
 
     if (actualHash != expectedHash) {
+      // IMMEDIATE DESTRUCTION — compromised file
       if (await targetFile.exists()) {
         await targetFile.delete();
       }
       throw const SecurityException(
-        'Compromised Update File Detected!',
+        'CHECKSUM MISMATCH — Compromised update file DESTROYED. '
+        'Potential supply-chain attack detected.',
       );
     }
 
     return VerifiedDownloadResult(file: targetFile, sha256Hash: actualHash);
   }
+
+  /// ──────────────────────────────────────────────────────────────────
+  ///  Apply downloaded app update (launch installer / replace exe)
+  /// ──────────────────────────────────────────────────────────────────
+  Future<void> applyAppUpdate(VerifiedDownloadResult result) async {
+    final file = result.file;
+    final path = file.path.toLowerCase();
+
+    if (path.endsWith('.exe')) {
+      // Launch the installer/exe and exit current process
+      await Process.start(file.path, [], mode: ProcessStartMode.detached);
+    } else if (path.endsWith('.zip')) {
+      // For zip archives, just open the containing directory
+      final dir = file.parent.path;
+      await Process.start('explorer', [dir],
+          mode: ProcessStartMode.detached);
+    }
+  }
+
+  /// ──────────────────────────────────────────────────────────────────
+  ///  Get the path to a verified firmware file for ESP32 flashing
+  /// ──────────────────────────────────────────────────────────────────
+  String? getFirmwarePath(VerifiedDownloadResult? result) {
+    return result?.file.path;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  PRIVATE — Manifest-backed release parsing
+  // ════════════════════════════════════════════════════════════════════
 
   Future<GitHubReleaseInfo> _fetchManifestBackedRelease({
     required String tagName,
@@ -480,22 +531,22 @@ class GitHubUpdaterService {
     final escapedAssetName = RegExp.escape(assetName);
     final patterns = <RegExp>[
       RegExp(
-        '^\\s*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*$',
+        '^\\s*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*\$',
         caseSensitive: false,
         multiLine: true,
       ),
       RegExp(
-        '^\\s*SHA256[_\\-\\s]*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*$',
+        '^\\s*SHA256[_\\-\\s]*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*\$',
         caseSensitive: false,
         multiLine: true,
       ),
       RegExp(
-        '^\\s*[-*]\\s*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*$',
+        '^\\s*[-*]\\s*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*\$',
         caseSensitive: false,
         multiLine: true,
       ),
       RegExp(
-        '^\\s*$escapedAssetName[^\\r\\n]*?([A-Fa-f0-9]{64})\\s*$',
+        '^\\s*$escapedAssetName[^\\r\\n]*?([A-Fa-f0-9]{64})\\s*\$',
         caseSensitive: false,
         multiLine: true,
       ),

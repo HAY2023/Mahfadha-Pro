@@ -55,10 +55,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             final json = jsonDecode(message);
             if (json['status'] == 'event') {
+              final appState = context.read<AppState>();
               if (json['message'] == 'BIOMETRIC_UNLOCKED') {
                 setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
+                // [V2] Signal biometric unlock to vault
+                appState.onBiometricUnlocked();
               } else if (json['message'] == 'BIOMETRIC_LOCKED') {
                 setState(() => _status = 'الجهاز متصل وينتظر التحقق الحيوي');
+                // [V2] Lock the vault
+                appState.lockBiometricVault();
               }
             }
           } catch (_) {}
@@ -108,6 +113,114 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// [V2] Show add account dialog with targetUrl field
+  void _showAddAccountDialog() {
+    final nameCtrl = TextEditingController();
+    final userCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(40),
+        child: Container(
+          width: 480, padding: const EdgeInsets.all(28),
+          decoration: MarsTheme.glassCard(borderRadius: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              const Icon(Icons.person_add_alt_1, color: MarsTheme.success, size: 24),
+              const SizedBox(width: 10),
+              Text('إضافة حساب جديد', style: GoogleFonts.cairo(
+                color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700,
+              )),
+            ]),
+            const SizedBox(height: 20),
+            _inputField(nameCtrl, 'اسم الحساب', Icons.label),
+            const SizedBox(height: 12),
+            _inputField(userCtrl, 'اسم المستخدم', Icons.person),
+            const SizedBox(height: 12),
+            _inputField(passCtrl, 'كلمة المرور', Icons.lock, obscure: true),
+            const SizedBox(height: 12),
+            _inputField(urlCtrl, 'رابط الدخول التلقائي (URL)', Icons.link,
+              hint: 'https://example.com/login'),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: MarsTheme.success.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MarsTheme.success.withOpacity(0.15)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.keyboard, color: MarsTheme.success, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  'الرابط سيُستخدم في الدخول التلقائي (Rubber Ducky) من الجهاز مباشرة.',
+                  style: GoogleFonts.cairo(color: MarsTheme.success, fontSize: 10),
+                )),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء'),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton.icon(
+                icon: const Icon(Icons.send, size: 18),
+                label: const Text('إرسال للجهاز'),
+                onPressed: () {
+                  _sendCommand({
+                    'cmd': 'add_account',
+                    'name': nameCtrl.text,
+                    'username': userCtrl.text,
+                    'password': passCtrl.text,
+                    'targetUrl': urlCtrl.text,
+                  });
+                  Navigator.pop(ctx);
+                },
+              )),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _inputField(TextEditingController ctrl, String label, IconData icon,
+      {bool obscure = false, String? hint}) {
+    return TextField(
+      controller: ctrl,
+      obscureText: obscure,
+      style: GoogleFonts.firaCode(color: MarsTheme.textPrimary, fontSize: 13),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        labelStyle: GoogleFonts.cairo(color: MarsTheme.textMuted, fontSize: 13),
+        hintStyle: GoogleFonts.firaCode(color: MarsTheme.textMuted.withOpacity(0.5), fontSize: 11),
+        prefixIcon: Icon(icon, color: MarsTheme.cyanDim, size: 18),
+        filled: true,
+        fillColor: MarsTheme.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: MarsTheme.borderGlow),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: MarsTheme.borderGlow),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: MarsTheme.cyanNeon, width: 1.5),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     if (_port?.isOpen ?? false) {
@@ -138,14 +251,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'عمليات الجهاز',
-                            style: GoogleFonts.cairo(
-                              color: MarsTheme.textMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          Text('عمليات الجهاز', style: GoogleFonts.cairo(
+                            color: MarsTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w700,
+                          )),
                           const SizedBox(height: 18),
                           Expanded(child: _buildOperationsGrid()),
                         ],
@@ -173,31 +281,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: MarsTheme.borderGlow),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Mahfadha Pro',
-                style: GoogleFonts.inter(
-                  color: MarsTheme.cyanNeon,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 18),
+            const SizedBox(width: 8),
+            Text('Mahfadha Pro', style: GoogleFonts.inter(
+              color: MarsTheme.cyanNeon, fontSize: 13, fontWeight: FontWeight.w700,
+            )),
+          ]),
         ),
         const SizedBox(width: 12),
-        Text(
-          'لوحة التشغيل الآمنة',
-          style: GoogleFonts.cairo(
-            color: MarsTheme.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text('لوحة التشغيل الآمنة', style: GoogleFonts.cairo(
+          color: MarsTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700,
+        )),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -208,25 +303,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: (connected ? MarsTheme.success : MarsTheme.error).withOpacity(0.3),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.circle,
-                size: 8,
-                color: connected ? MarsTheme.success : MarsTheme.error,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _status,
-                style: GoogleFonts.cairo(
-                  color: connected ? MarsTheme.success : MarsTheme.error,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.circle, size: 8,
+              color: connected ? MarsTheme.success : MarsTheme.error),
+            const SizedBox(width: 8),
+            Text(_status, style: GoogleFonts.cairo(
+              color: connected ? MarsTheme.success : MarsTheme.error,
+              fontSize: 11.5, fontWeight: FontWeight.w600,
+            )),
+          ]),
         ),
       ],
     );
@@ -243,52 +328,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
           mainAxisSpacing: 14,
           children: [
             _operationCard(
-              icon: Icons.sync_rounded,
-              label: 'مزامنة الوقت',
-              color: MarsTheme.cyan,
+              icon: Icons.sync_rounded, label: 'مزامنة الوقت', color: MarsTheme.cyan,
               onTap: () => _sendCommand({
                 'cmd': 'sync_time',
                 'time': DateTime.now().millisecondsSinceEpoch ~/ 1000,
               }),
             ),
             _operationCard(
-              icon: Icons.person_add_alt_1_rounded,
-              label: 'إضافة سجل',
+              icon: Icons.person_add_alt_1_rounded, label: 'إضافة حساب',
               color: MarsTheme.success,
-              onTap: () => _sendCommand({
-                'cmd': 'add_account',
-                'name': 'جديد',
-                'username': '',
-                'password': '',
-              }),
+              onTap: _showAddAccountDialog,
             ),
             _operationCard(
-              icon: Icons.list_alt_rounded,
-              label: 'عرض السجلات',
+              icon: Icons.shield_rounded, label: 'القبو الحساس',
+              color: const Color(0xFFE879F9),
+              onTap: () => Navigator.pushNamed(context, '/vault'),
+            ),
+            _operationCard(
+              icon: Icons.list_alt_rounded, label: 'عرض السجلات',
               color: MarsTheme.accent,
               onTap: () => _sendCommand({'cmd': 'list_accounts'}),
             ),
             _operationCard(
-              icon: Icons.upload_file_rounded,
-              label: 'استيراد CSV',
-              color: MarsTheme.warning,
-              onTap: _openCsvImporter,
+              icon: Icons.upload_file_rounded, label: 'استيراد CSV',
+              color: MarsTheme.warning, onTap: _openCsvImporter,
             ),
             _operationCard(
-              icon: Icons.download_done_rounded,
-              label: 'نسخة احتياطية',
+              icon: Icons.download_done_rounded, label: 'نسخة احتياطية',
               color: const Color(0xFF2DD4BF),
               onTap: () => _sendCommand({'cmd': 'export_backup'}),
             ),
             _operationCard(
-              icon: Icons.refresh_rounded,
-              label: 'مركز التحديثات',
+              icon: Icons.refresh_rounded, label: 'مركز التحديثات',
               color: MarsTheme.cyanGlow,
               onTap: () => Navigator.pushNamed(context, '/updates'),
             ),
             _operationCard(
-              icon: Icons.delete_sweep_rounded,
-              label: 'إعادة ضبط المصنع',
+              icon: Icons.delete_sweep_rounded, label: 'إعادة ضبط المصنع',
               color: MarsTheme.error,
               onTap: () => _sendCommand({'cmd': 'factory_reset'}),
             ),
@@ -299,39 +375,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _operationCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
+    required IconData icon, required String label,
+    required Color color, required VoidCallback onTap,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
+      borderRadius: BorderRadius.circular(16), onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: color.withOpacity(0.06),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(0.18)),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 26),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.cairo(
-                  color: MarsTheme.textPrimary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(label, textAlign: TextAlign.center,
+              style: GoogleFonts.cairo(
+                color: MarsTheme.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600,
+              )),
+          ),
+        ]),
       ),
     );
   }

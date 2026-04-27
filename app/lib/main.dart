@@ -12,6 +12,7 @@ import 'screens/connection_gate.dart';
 import 'screens/dashboard.dart';
 import 'screens/setup_wizard.dart';
 import 'screens/update_center.dart';
+import 'screens/vault_screen.dart';
 import 'theme/mars_theme.dart';
 import 'widgets/app_title_bar.dart';
 import 'widgets/auto_lock_wrapper.dart';
@@ -197,6 +198,12 @@ class _MahfadhaAppState extends State<MahfadhaApp>
               child: AutoLockWrapper(
                 timeout: Duration(seconds: 180),
                 child: UpdateCenterScreen(),
+              ),
+            ),
+        '/vault': (context) => const _AppShell(
+              child: AutoLockWrapper(
+                timeout: Duration(seconds: 180),
+                child: VaultScreen(),
               ),
             ),
       },
