@@ -9,6 +9,7 @@ import 'providers/app_state.dart';
 import 'screens/setup_wizard.dart';
 import 'screens/dashboard.dart';
 import 'screens/connection_gate.dart';
+import 'widgets/auto_lock_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,13 +64,16 @@ class MahfadhaApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const ConnectionGateScreen(),
-        '/home': (context) => Consumer<AppState>(
-          builder: (context, appState, _) {
-            if (appState.isFirstLaunch) {
-              return const SetupWizard();
-            }
-            return const DashboardScreen();
-          },
+        '/home': (context) => AutoLockWrapper(
+          timeout: const Duration(seconds: 180), // 3 دقائق
+          child: Consumer<AppState>(
+            builder: (context, appState, _) {
+              if (appState.isFirstLaunch) {
+                return const SetupWizard();
+              }
+              return const DashboardScreen();
+            },
+          ),
         ),
       },
     );
