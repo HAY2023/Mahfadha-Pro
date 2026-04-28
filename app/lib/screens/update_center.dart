@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +15,8 @@ class UpdateCenterScreen extends StatefulWidget {
   State<UpdateCenterScreen> createState() => _UpdateCenterScreenState();
 }
 
-class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
+class _UpdateCenterScreenState extends State<UpdateCenterScreen>
+    with SingleTickerProviderStateMixin {
   static const String _currentDesktopVersion = '1.0.0+1';
 
   final GitHubUpdaterService _updater = GitHubUpdaterService(
@@ -23,191 +26,139 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
   GitHubReleaseInfo? _releaseInfo;
   bool _isChecking = false;
   bool _isDownloadingApp = false;
-  bool _isDownloadingFirmware = false;
   double _appProgress = 0;
-  double _firmwareProgress = 0;
-  String _appStatus = 'لم يتم تنفيذ فحص تحديث بعد.';
-  String _firmwareStatus = 'لم يتم تنفيذ فحص تحديث بعد.';
   String? _appDownloadedPath;
-  String? _firmwareDownloadedPath;
   String? _appHash;
-  String? _firmwareHash;
   DateTime? _lastCheckedAt;
+
+  // ── Status types for visual feedback ──
+  _UpdateStatus _appStatus = _UpdateStatus.idle;
+  String _appStatusMessage = 'لم يتم فحص التحديثات بعد.';
+
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+  }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _updater.dispose();
     super.dispose();
   }
 
   Future<void> _checkForUpdates() async {
-    if (_isChecking) {
-      return;
-    }
+    if (_isChecking) return;
 
     setState(() {
       _isChecking = true;
       _releaseInfo = null;
       _appDownloadedPath = null;
-      _firmwareDownloadedPath = null;
       _appHash = null;
-      _firmwareHash = null;
       _appProgress = 0;
-      _firmwareProgress = 0;
-      _appStatus = 'Checking secure servers (GitHub)...';
-      _firmwareStatus = 'Checking secure servers (GitHub)...';
+      _appStatus = _UpdateStatus.checking;
+      _appStatusMessage = 'جارٍ الاتصال بخوادم GitHub الآمنة...';
     });
 
     try {
       final releaseInfo = await _updater.fetchLatestRelease();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _isChecking = false;
         _releaseInfo = releaseInfo;
         _lastCheckedAt = DateTime.now();
-        _appStatus =
-            'تم العثور على الإصدار ${releaseInfo.tagName}. الحزمة المعتمدة للتطبيق: ${releaseInfo.appAsset.name}.';
-        _firmwareStatus =
-            'تم العثور على الإصدار ${releaseInfo.tagName}. ملف وحدة التشفير المعتمد: ${releaseInfo.firmwareAsset.name}.';
+        _appStatus = _UpdateStatus.available;
+        _appStatusMessage =
+            'الإصدار ${releaseInfo.tagName} متاح للتنزيل.\nالحزمة: ${releaseInfo.appAsset.name}';
       });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+    } on NoReleasesException {
+      if (!mounted) return;
       setState(() {
         _isChecking = false;
-        _appStatus = 'فشل الاتصال بخادم التحديثات الآمن: $error';
-        _firmwareStatus = 'فشل الاتصال بخادم التحديثات الآمن: $error';
+        _lastCheckedAt = DateTime.now();
+        _appStatus = _UpdateStatus.upToDate;
+        _appStatusMessage =
+            'أنت تستخدم أحدث إصدار.\nلا توجد تحديثات جديدة متاحة حالياً.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isChecking = false;
+        _appStatus = _UpdateStatus.error;
+        _appStatusMessage = 'تعذر الاتصال بخادم التحديثات.\n$error';
       });
     }
   }
 
   Future<void> _downloadAppUpdate() async {
     final releaseInfo = _releaseInfo;
-    if (releaseInfo == null || _isDownloadingApp) {
-      return;
-    }
+    if (releaseInfo == null || _isDownloadingApp) return;
 
     setState(() {
       _isDownloadingApp = true;
       _appProgress = 0;
       _appDownloadedPath = null;
       _appHash = null;
-      _appStatus = 'Downloading version ${releaseInfo.tagName}...';
+      _appStatus = _UpdateStatus.downloading;
+      _appStatusMessage = 'جارٍ تنزيل الإصدار ${releaseInfo.tagName}...';
     });
 
     try {
       final result = await _updater.downloadAndVerifyAsset(
         asset: releaseInfo.appAsset,
         onProgress: (progressPercent) {
-          if (!mounted) {
-            return;
-          }
-
+          if (!mounted) return;
           setState(() {
             _appProgress = progressPercent / 100;
           });
         },
         onVerificationStart: () {
-          if (!mounted) {
-            return;
-          }
-
+          if (!mounted) return;
           setState(() {
-            _appStatus = 'Verifying cryptographic signature...';
+            _appStatus = _UpdateStatus.verifying;
+            _appStatusMessage = 'جارٍ التحقق من سلامة الملف (SHA-256)...';
           });
         },
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _isDownloadingApp = false;
         _appProgress = 1;
         _appDownloadedPath = result.file.path;
         _appHash = result.sha256Hash;
-        _appStatus =
-            'اكتمل تنزيل تحديث التطبيق والتحقق منه بنجاح. الحزمة جاهزة للتثبيت المحلي.';
+        _appStatus = _UpdateStatus.ready;
+        _appStatusMessage =
+            'تم التنزيل والتحقق بنجاح ✓\nالتحديث جاهز للتثبيت.';
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         _isDownloadingApp = false;
         _appProgress = 0;
-        _appStatus = error.toString();
+        _appStatus = _UpdateStatus.error;
+        _appStatusMessage = '$error';
       });
     }
   }
 
-  Future<void> _downloadFirmwareUpdate() async {
-    final releaseInfo = _releaseInfo;
-    if (releaseInfo == null || _isDownloadingFirmware) {
-      return;
-    }
+  Future<void> _installUpdate() async {
+    if (_appDownloadedPath == null || _appHash == null) return;
 
-    setState(() {
-      _isDownloadingFirmware = true;
-      _firmwareProgress = 0;
-      _firmwareDownloadedPath = null;
-      _firmwareHash = null;
-      _firmwareStatus = 'Downloading version ${releaseInfo.tagName}...';
-    });
+    final result = VerifiedDownloadResult(
+      file: File(_appDownloadedPath!),
+      sha256Hash: _appHash!,
+    );
 
-    try {
-      final result = await _updater.downloadAndVerifyAsset(
-        asset: releaseInfo.firmwareAsset,
-        onProgress: (progressPercent) {
-          if (!mounted) {
-            return;
-          }
-
-          setState(() {
-            _firmwareProgress = progressPercent / 100;
-          });
-        },
-        onVerificationStart: () {
-          if (!mounted) {
-            return;
-          }
-
-          setState(() {
-            _firmwareStatus = 'Verifying cryptographic signature...';
-          });
-        },
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isDownloadingFirmware = false;
-        _firmwareProgress = 1;
-        _firmwareDownloadedPath = result.file.path;
-        _firmwareHash = result.sha256Hash;
-        _firmwareStatus =
-            'اكتمل تنزيل ملف وحدة التشفير والتحقق منه بنجاح. الملف جاهز للتمرير إلى جسر Python عبر USB.';
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isDownloadingFirmware = false;
-        _firmwareProgress = 0;
-        _firmwareStatus = error.toString();
-      });
-    }
+    await _updater.applyAppUpdate(result);
   }
 
   String _formatDate(DateTime value) {
@@ -220,14 +171,8 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
   }
 
   String _shortHash(String? hash) {
-    if (hash == null || hash.isEmpty) {
-      return '-';
-    }
-
-    if (hash.length <= 16) {
-      return hash;
-    }
-
+    if (hash == null || hash.isEmpty) return '-';
+    if (hash.length <= 16) return hash;
     return '${hash.substring(0, 12)}...${hash.substring(hash.length - 8)}';
   }
 
@@ -257,32 +202,7 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
                 children: [
                   _buildHeader(context),
                   const SizedBox(height: 22),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildSectionCard(
-                            title: 'تحديث التطبيق',
-                            subtitle:
-                                'قراءة manifest رسمي من GitHub ثم تنزيل الحزمة والتحقق من SHA-256 قبل أي اعتماد محلي.',
-                            icon: Icons.system_update_alt_rounded,
-                            child: _buildAppUpdateBody(),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildSectionCard(
-                            title: 'تحديث وحدة التشفير',
-                            subtitle:
-                                'قراءة firmware.bin من نفس manifest الآمن ثم التحقق من سلامة الملف قبل تمريره إلى قناة USB.',
-                            icon: Icons.memory_rounded,
-                            child: _buildFirmwareUpdateBody(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: _buildUpdateCard()),
                 ],
               ),
             ),
@@ -308,68 +228,92 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
           label: const Text('رجوع'),
         ),
         const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'مركز التحديثات',
-              style: GoogleFonts.cairo(
-                color: MarsTheme.textPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'مركز التحديثات',
+                style: GoogleFonts.cairo(
+                  color: MarsTheme.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'قناة تحديث موحدة للتطبيق ووحدة التشفير عبر GitHub Releases و manifest رسمي.',
-              style: GoogleFonts.cairo(
-                color: MarsTheme.textMuted,
-                fontSize: 12.5,
+              const SizedBox(height: 4),
+              Text(
+                'تحديث التطبيق عبر GitHub Releases مع التحقق من SHA-256.',
+                style: GoogleFonts.cairo(
+                  color: MarsTheme.textMuted,
+                  fontSize: 12.5,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const Spacer(),
-        ElevatedButton.icon(
-          onPressed: _isChecking ? null : _checkForUpdates,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: Text(_isChecking ? 'جارٍ الفحص' : 'التحقق من التحديثات'),
+        const SizedBox(width: 12),
+        AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            final isActive = _isChecking;
+            return Container(
+              decoration: isActive
+                  ? BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: MarsTheme.cyanNeon
+                              .withOpacity(0.2 * _pulseController.value),
+                          blurRadius: 20,
+                          spreadRadius: -4,
+                        ),
+                      ],
+                    )
+                  : null,
+              child: child,
+            );
+          },
+          child: ElevatedButton.icon(
+            onPressed: _isChecking ? null : _checkForUpdates,
+            icon: AnimatedRotation(
+              turns: _isChecking ? 1.0 : 0.0,
+              duration: const Duration(seconds: 1),
+              child: const Icon(Icons.refresh_rounded, size: 18),
+            ),
+            label: Text(_isChecking ? 'جارٍ الفحص...' : 'فحص التحديثات'),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSectionCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Widget child,
-  }) {
+  Widget _buildUpdateCard() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
       decoration: MarsTheme.glassCard(borderRadius: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Card Header ──
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: MarsTheme.cyanNeon.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: MarsTheme.borderGlow),
+                  color: _statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _statusColor.withOpacity(0.2)),
                 ),
-                child: Icon(icon, color: MarsTheme.cyanNeon, size: 20),
+                child: Icon(_statusIcon, color: _statusColor, size: 22),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      'تحديث تطبيق Mahfadha Pro',
                       style: GoogleFonts.cairo(
                         color: MarsTheme.textPrimary,
                         fontSize: 18,
@@ -378,10 +322,10 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      'يتضمن VC++ Runtime لضمان التشغيل على جميع الأجهزة.',
                       style: GoogleFonts.cairo(
                         color: MarsTheme.textMuted,
-                        fontSize: 12,
+                        fontSize: 11.5,
                         height: 1.5,
                       ),
                     ),
@@ -390,202 +334,337 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 24),
 
-  Widget _buildAppUpdateBody() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildKeyValueRow('الإصدار الحالي', _currentDesktopVersion),
-        const SizedBox(height: 10),
-        _buildKeyValueRow('الإصدار المتاح', _releaseInfo?.tagName ?? '-'),
-        const SizedBox(height: 10),
-        _buildKeyValueRow(
-          'آخر فحص',
-          _lastCheckedAt == null ? '-' : _formatDate(_lastCheckedAt!),
-        ),
-        const SizedBox(height: 10),
-        _buildKeyValueRow(
-          'الحزمة المعتمدة',
-          _releaseInfo?.appAsset.name ?? 'CipherVaultPro_Setup.exe',
-        ),
-        const SizedBox(height: 16),
-        _buildStatusPanel(
-          title: 'حالة التطبيق',
-          message: _appStatus,
-          color: _isDownloadingApp ? MarsTheme.warning : MarsTheme.cyanNeon,
-        ),
-        const SizedBox(height: 16),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: _isDownloadingApp || _appProgress > 0 ? _appProgress : 0,
-            minHeight: 8,
-            backgroundColor: MarsTheme.surfaceLight,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              _appProgress >= 1 ? MarsTheme.success : MarsTheme.cyanNeon,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildKeyValueRow('SHA-256', _shortHash(_appHash)),
-        const SizedBox(height: 10),
-        _buildKeyValueRow('المسار المؤقت', _appDownloadedPath ?? '-'),
-        const Spacer(),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: (_releaseInfo == null || _isDownloadingApp)
-                ? null
-                : _downloadAppUpdate,
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: Text(
-              _isDownloadingApp ? 'جارٍ التنزيل' : 'تنزيل تحديث التطبيق',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFirmwareUpdateBody() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildKeyValueRow('الإصدار المتاح', _releaseInfo?.tagName ?? '-'),
-        const SizedBox(height: 10),
-        _buildKeyValueRow(
-          'الملف المعتمد',
-          _releaseInfo?.firmwareAsset.name ?? 'firmware.bin',
-        ),
-        const SizedBox(height: 10),
-        _buildKeyValueRow(
-          'الحجم',
-          _releaseInfo == null
-              ? '-'
-              : '${(_releaseInfo!.firmwareAsset.size / 1024).toStringAsFixed(1)} KB',
-        ),
-        const SizedBox(height: 16),
-        _buildStatusPanel(
-          title: 'حالة وحدة التشفير',
-          message: _firmwareStatus,
-          color:
-              _isDownloadingFirmware ? MarsTheme.warning : MarsTheme.cyanNeon,
-        ),
-        const SizedBox(height: 16),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: _isDownloadingFirmware || _firmwareProgress > 0
-                ? _firmwareProgress
-                : 0,
-            minHeight: 8,
-            backgroundColor: MarsTheme.surfaceLight,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              _firmwareProgress >= 1
-                  ? MarsTheme.success
-                  : MarsTheme.cyanNeon,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildKeyValueRow('SHA-256', _shortHash(_firmwareHash)),
-        const SizedBox(height: 10),
-        _buildKeyValueRow('المسار المؤقت', _firmwareDownloadedPath ?? '-'),
-        const Spacer(),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: (_releaseInfo == null || _isDownloadingFirmware)
-                ? null
-                : _downloadFirmwareUpdate,
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: Text(
-              _isDownloadingFirmware
-                  ? 'جارٍ التنزيل'
-                  : 'تنزيل تحديث وحدة التشفير',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKeyValueRow(String label, String value) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: MarsTheme.surface.withOpacity(0.58),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MarsTheme.borderGlow),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.cairo(
-              color: MarsTheme.textMuted,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: GoogleFonts.firaCode(
-                color: MarsTheme.textPrimary,
-                fontSize: 12,
+          // ── Info Grid ──
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoTile(
+                  icon: Icons.local_offer_rounded,
+                  label: 'الإصدار الحالي',
+                  value: _currentDesktopVersion,
+                ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildInfoTile(
+                  icon: Icons.new_releases_rounded,
+                  label: 'الإصدار المتاح',
+                  value: _releaseInfo?.tagName ?? '-',
+                  highlight: _releaseInfo != null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildInfoTile(
+                  icon: Icons.schedule_rounded,
+                  label: 'آخر فحص',
+                  value: _lastCheckedAt != null
+                      ? _formatDate(_lastCheckedAt!)
+                      : '-',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Status Panel ──
+          _buildStatusPanel(),
+          const SizedBox(height: 16),
+
+          // ── Progress Bar ──
+          if (_isDownloadingApp || _appProgress > 0) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: _appProgress,
+                      minHeight: 8,
+                      backgroundColor: MarsTheme.surfaceLight,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _appProgress >= 1
+                            ? MarsTheme.success
+                            : MarsTheme.cyanNeon,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(_appProgress * 100).toStringAsFixed(0)}%',
+                  style: GoogleFonts.firaCode(
+                    color: MarsTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Hash + Path details ──
+          if (_appHash != null || _appDownloadedPath != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildInfoTile(
+                    icon: Icons.fingerprint_rounded,
+                    label: 'SHA-256',
+                    value: _shortHash(_appHash),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildInfoTile(
+                    icon: Icons.folder_rounded,
+                    label: 'المسار المؤقت',
+                    value: _appDownloadedPath ?? '-',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          const Spacer(),
+
+          // ── Action Buttons ──
+          Row(
+            children: [
+              // Download button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: (_releaseInfo == null || _isDownloadingApp)
+                      ? null
+                      : _downloadAppUpdate,
+                  icon: Icon(
+                    _isDownloadingApp
+                        ? Icons.downloading_rounded
+                        : Icons.download_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _isDownloadingApp ? 'جارٍ التنزيل...' : 'تنزيل التحديث',
+                  ),
+                ),
+              ),
+
+              // Install button (only when download is complete)
+              if (_appStatus == _UpdateStatus.ready) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _installUpdate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MarsTheme.success,
+                    ),
+                    icon: const Icon(Icons.install_desktop_rounded, size: 18),
+                    label: const Text('تثبيت التحديث'),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusPanel({
-    required String title,
-    required String message,
-    required Color color,
+  Widget _buildInfoTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool highlight = false,
   }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.22)),
+        color: highlight
+            ? MarsTheme.cyanNeon.withOpacity(0.06)
+            : MarsTheme.surface.withOpacity(0.58),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: highlight
+              ? MarsTheme.cyanNeon.withOpacity(0.2)
+              : MarsTheme.borderGlow,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Icon(icon, color: MarsTheme.textMuted, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.cairo(
+                  color: MarsTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           Text(
-            title,
-            style: GoogleFonts.cairo(
-              color: color,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
+            value,
+            style: GoogleFonts.firaCode(
+              color: highlight ? MarsTheme.cyanNeon : MarsTheme.textPrimary,
+              fontSize: 12,
+              fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPanel() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _statusColor.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _statusColor.withOpacity(0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              final shouldPulse = _appStatus == _UpdateStatus.checking ||
+                  _appStatus == _UpdateStatus.downloading ||
+                  _appStatus == _UpdateStatus.verifying;
+              return Opacity(
+                opacity: shouldPulse
+                    ? 0.5 + _pulseController.value * 0.5
+                    : 1.0,
+                child: child,
+              );
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(_statusIcon, color: _statusColor, size: 18),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            style: GoogleFonts.cairo(
-              color: MarsTheme.textSecondary,
-              fontSize: 12.5,
-              height: 1.8,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _statusTitle,
+                  style: GoogleFonts.cairo(
+                    color: _statusColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _appStatusMessage,
+                  style: GoogleFonts.cairo(
+                    color: MarsTheme.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.7,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  // ── Status helpers ──
+
+  Color get _statusColor {
+    switch (_appStatus) {
+      case _UpdateStatus.idle:
+        return MarsTheme.textMuted;
+      case _UpdateStatus.checking:
+        return MarsTheme.cyanNeon;
+      case _UpdateStatus.upToDate:
+        return MarsTheme.success;
+      case _UpdateStatus.available:
+        return MarsTheme.cyanNeon;
+      case _UpdateStatus.downloading:
+        return MarsTheme.warning;
+      case _UpdateStatus.verifying:
+        return MarsTheme.cyanNeon;
+      case _UpdateStatus.ready:
+        return MarsTheme.success;
+      case _UpdateStatus.error:
+        return MarsTheme.error;
+    }
+  }
+
+  IconData get _statusIcon {
+    switch (_appStatus) {
+      case _UpdateStatus.idle:
+        return Icons.info_outline_rounded;
+      case _UpdateStatus.checking:
+        return Icons.search_rounded;
+      case _UpdateStatus.upToDate:
+        return Icons.check_circle_rounded;
+      case _UpdateStatus.available:
+        return Icons.new_releases_rounded;
+      case _UpdateStatus.downloading:
+        return Icons.downloading_rounded;
+      case _UpdateStatus.verifying:
+        return Icons.verified_rounded;
+      case _UpdateStatus.ready:
+        return Icons.check_circle_rounded;
+      case _UpdateStatus.error:
+        return Icons.error_outline_rounded;
+    }
+  }
+
+  String get _statusTitle {
+    switch (_appStatus) {
+      case _UpdateStatus.idle:
+        return 'في الانتظار';
+      case _UpdateStatus.checking:
+        return 'جارٍ الفحص...';
+      case _UpdateStatus.upToDate:
+        return 'أحدث إصدار ✓';
+      case _UpdateStatus.available:
+        return 'تحديث متاح';
+      case _UpdateStatus.downloading:
+        return 'جارٍ التنزيل...';
+      case _UpdateStatus.verifying:
+        return 'جارٍ التحقق...';
+      case _UpdateStatus.ready:
+        return 'جاهز للتثبيت ✓';
+      case _UpdateStatus.error:
+        return 'خطأ';
+    }
+  }
+}
+
+enum _UpdateStatus {
+  idle,
+  checking,
+  upToDate,
+  available,
+  downloading,
+  verifying,
+  ready,
+  error,
 }

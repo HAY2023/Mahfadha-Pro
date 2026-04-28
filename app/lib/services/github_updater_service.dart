@@ -17,6 +17,14 @@ class SecurityException implements Exception {
   String toString() => 'SecurityException: $message';
 }
 
+/// Thrown when no releases exist yet on GitHub.
+class NoReleasesException implements Exception {
+  const NoReleasesException();
+
+  @override
+  String toString() => 'لا توجد إصدارات متاحة حالياً على GitHub.';
+}
+
 class GitHubReleaseAsset {
   final String name;
   final Uri downloadUrl;
@@ -35,13 +43,11 @@ class GitHubReleaseInfo {
   final String tagName;
   final String body;
   final GitHubReleaseAsset appAsset;
-  final GitHubReleaseAsset firmwareAsset;
 
   const GitHubReleaseInfo({
     required this.tagName,
     required this.body,
     required this.appAsset,
-    required this.firmwareAsset,
   });
 }
 
@@ -56,7 +62,7 @@ class VerifiedDownloadResult {
 }
 
 /// ══════════════════════════════════════════════════════════════════════
-///  GitHub Releases OTA — Military-Grade Update Service
+///  GitHub Releases OTA — Secure Update Service
 ///
 ///  Security measures:
 ///  1. HTTPS-only connections to trusted GitHub domains
@@ -64,8 +70,7 @@ class VerifiedDownloadResult {
 ///  3. Immediate deletion of any file that fails checksum
 ///  4. Manifest-backed releases with pinned hashes
 ///  5. Secure temp directory isolation
-///  6. Self-update support (download CipherVaultPro_Setup.exe)
-///  7. Firmware OTA (download firmware.bin for ESP32 flash)
+///  6. Self-update support (download Mahfadha-Pro-Setup.exe)
 /// ══════════════════════════════════════════════════════════════════════
 class GitHubUpdaterService {
   GitHubUpdaterService({
@@ -89,13 +94,9 @@ class GitHubUpdaterService {
   static const String _manifestAssetName = 'latest.json';
 
   static const List<String> _appAssetCandidates = [
-    'CipherVaultPro_Setup.exe',
-    'CipherVaultPro.exe',
-    'CipherVault-Pro-Windows.zip',
-  ];
-
-  static const List<String> _firmwareAssetCandidates = [
-    'firmware.bin',
+    'Mahfadha-Pro-Setup.exe',
+    'MahfadhaPro.exe',
+    'Mahfadha-Pro-Windows.zip',
   ];
 
   Uri get _latestReleaseUri => Uri.https(
@@ -114,16 +115,21 @@ class GitHubUpdaterService {
       headers: _defaultHeaders,
     );
 
+    // ── Handle 404: No releases exist yet ──
+    if (response.statusCode == HttpStatus.notFound) {
+      throw const NoReleasesException();
+    }
+
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException(
-        'GitHub API request failed with status ${response.statusCode}.',
+        'فشل الاتصال بخادم GitHub (الحالة: ${response.statusCode}).',
         uri: _latestReleaseUri,
       );
     }
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid GitHub release payload.');
+      throw const FormatException('بيانات الإصدار غير صالحة.');
     }
 
     final tagName = decoded['tag_name']?.toString().trim();
@@ -131,13 +137,14 @@ class GitHubUpdaterService {
     final assets = decoded['assets'];
 
     if (tagName == null || tagName.isEmpty) {
-      throw const FormatException('Missing tag_name in GitHub release.');
+      throw const FormatException('الإصدار لا يحتوي على رقم إصدار.');
     }
 
     if (assets is! List) {
-      throw const FormatException('Missing assets array in GitHub release.');
+      throw const FormatException('الإصدار لا يحتوي على ملفات.');
     }
 
+    // ── Try manifest-backed release first ──
     final manifestAssetJson = _findAssetJsonOrNull(
       assets,
       const [_manifestAssetName],
@@ -151,8 +158,8 @@ class GitHubUpdaterService {
       );
     }
 
+    // ── Fallback: Parse from release assets directly ──
     final appAssetJson = _findAssetJson(assets, _appAssetCandidates);
-    final firmwareAssetJson = _findAssetJson(assets, _firmwareAssetCandidates);
 
     return GitHubReleaseInfo(
       tagName: tagName,
@@ -161,16 +168,11 @@ class GitHubUpdaterService {
         assetJson: appAssetJson,
         releaseNotes: releaseNotes,
       ),
-      firmwareAsset: _parseLegacyReleaseAsset(
-        assetJson: firmwareAssetJson,
-        releaseNotes: releaseNotes,
-      ),
     );
   }
 
   /// ──────────────────────────────────────────────────────────────────
   ///  Download asset with progress tracking + SHA-256 verification
-  ///  MILITARY-GRADE: File is deleted immediately if hash mismatch
   /// ──────────────────────────────────────────────────────────────────
   Future<VerifiedDownloadResult> downloadAndVerifyAsset({
     required GitHubReleaseAsset asset,
@@ -194,7 +196,7 @@ class GitHubUpdaterService {
     final streamedResponse = await _client.send(request);
     if (streamedResponse.statusCode != HttpStatus.ok) {
       throw HttpException(
-        'Download failed with status ${streamedResponse.statusCode}.',
+        'فشل التنزيل (الحالة: ${streamedResponse.statusCode}).',
         uri: asset.downloadUrl,
       );
     }
@@ -227,21 +229,16 @@ class GitHubUpdaterService {
     onProgress?.call(100.0);
     onVerificationStart?.call();
 
-    // ── MILITARY-GRADE SHA-256 CHECKSUM ──
+    // ── SHA-256 CHECKSUM VERIFICATION ──
     final actualHash = await _calculateSha256(targetFile);
     final expectedHash = asset.sha256Hash.toLowerCase();
 
-    // Military-Grade Audit Log
-    print('[🛡️ SECURITY] Verifying OTA Payload SHA-256...\nExpected: $expectedHash\nActual:   $actualHash');
-
     if (actualHash != expectedHash) {
-      // IMMEDIATE DESTRUCTION — compromised file
       if (await targetFile.exists()) {
         await targetFile.delete();
       }
       throw const SecurityException(
-        'CHECKSUM MISMATCH — Compromised update file DESTROYED. '
-        'Potential supply-chain attack detected.',
+        'فشل التحقق من سلامة الملف — تم حذف الملف فوراً.',
       );
     }
 
@@ -249,28 +246,19 @@ class GitHubUpdaterService {
   }
 
   /// ──────────────────────────────────────────────────────────────────
-  ///  Apply downloaded app update (launch installer / replace exe)
+  ///  Apply downloaded app update (launch installer)
   /// ──────────────────────────────────────────────────────────────────
   Future<void> applyAppUpdate(VerifiedDownloadResult result) async {
     final file = result.file;
     final path = file.path.toLowerCase();
 
     if (path.endsWith('.exe')) {
-      // Launch the installer/exe and exit current process
       await Process.start(file.path, [], mode: ProcessStartMode.detached);
     } else if (path.endsWith('.zip')) {
-      // For zip archives, just open the containing directory
       final dir = file.parent.path;
       await Process.start('explorer', [dir],
           mode: ProcessStartMode.detached);
     }
-  }
-
-  /// ──────────────────────────────────────────────────────────────────
-  ///  Get the path to a verified firmware file for ESP32 flashing
-  /// ──────────────────────────────────────────────────────────────────
-  String? getFirmwarePath(VerifiedDownloadResult? result) {
-    return result?.file.path;
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -292,36 +280,29 @@ class GitHubUpdaterService {
     );
 
     if (schemaVersion < 1) {
-      throw const FormatException('Unsupported release manifest schema.');
+      throw const FormatException('إصدار manifest غير مدعوم.');
     }
 
     final manifestVersion = manifest['version']?.toString().trim();
     if (manifestVersion == null || manifestVersion.isEmpty) {
-      throw const FormatException('Release manifest is missing version.');
+      throw const FormatException('manifest لا يحتوي على رقم إصدار.');
     }
 
     if (manifestVersion != tagName) {
       throw FormatException(
-        'Manifest version mismatch. Expected $tagName, got $manifestVersion.',
+        'عدم تطابق الإصدار. متوقع: $tagName, وجد: $manifestVersion.',
       );
     }
 
     final manifestAssets = manifest['assets'];
     if (manifestAssets is! Map<String, dynamic>) {
-      throw const FormatException('Release manifest is missing assets.');
+      throw const FormatException('manifest لا يحتوي على ملفات.');
     }
 
     final appJson = manifestAssets['app'];
-    final firmwareJson = manifestAssets['firmware'];
 
     if (appJson is! Map<String, dynamic>) {
-      throw const FormatException('Release manifest is missing app asset.');
-    }
-
-    if (firmwareJson is! Map<String, dynamic>) {
-      throw const FormatException(
-        'Release manifest is missing firmware asset.',
-      );
+      throw const FormatException('manifest لا يحتوي على ملف التطبيق.');
     }
 
     return GitHubReleaseInfo(
@@ -330,10 +311,6 @@ class GitHubUpdaterService {
       appAsset: _parseManifestAsset(
         assetJson: appJson,
         assetLabel: 'app',
-      ),
-      firmwareAsset: _parseManifestAsset(
-        assetJson: firmwareJson,
-        assetLabel: 'firmware',
       ),
     );
   }
@@ -348,14 +325,14 @@ class GitHubUpdaterService {
 
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException(
-        'Manifest download failed with status ${response.statusCode}.',
+        'فشل تنزيل manifest (الحالة: ${response.statusCode}).',
         uri: manifestUri,
       );
     }
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid release manifest payload.');
+      throw const FormatException('بيانات manifest غير صالحة.');
     }
 
     return decoded;
@@ -368,7 +345,7 @@ class GitHubUpdaterService {
 
   Future<Directory> _ensureSecureTempDirectory() async {
     final base = Directory(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}mahfadha_pro_secure_updates',
+      '${Directory.systemTemp.path}${Platform.pathSeparator}mahfadha_pro_updates',
     );
 
     if (!await base.exists()) {
@@ -387,17 +364,17 @@ class GitHubUpdaterService {
     final sha256Hash = assetJson['sha256']?.toString().trim();
 
     if (name == null || name.isEmpty) {
-      throw FormatException('Manifest asset "$assetLabel" is missing name.');
+      throw FormatException('ملف "$assetLabel" غير موجود في manifest.');
     }
 
     if (downloadUrlValue == null || downloadUrlValue.isEmpty) {
       throw FormatException(
-        'Manifest asset "$assetLabel" is missing download_url.',
+        'رابط تنزيل "$assetLabel" غير موجود في manifest.',
       );
     }
 
     if (sha256Hash == null || sha256Hash.isEmpty) {
-      throw FormatException('Manifest asset "$assetLabel" is missing sha256.');
+      throw FormatException('بصمة "$assetLabel" غير موجودة في manifest.');
     }
 
     final downloadUrl = Uri.parse(downloadUrlValue);
@@ -422,7 +399,7 @@ class GitHubUpdaterService {
     final size = _parseIntField(assetJson['size'], fieldName: 'size');
 
     if (name == null || name.isEmpty) {
-      throw const FormatException('Release asset is missing a file name.');
+      throw const FormatException('اسم الملف غير موجود.');
     }
 
     return GitHubReleaseAsset(
@@ -442,7 +419,7 @@ class GitHubUpdaterService {
         .trim();
 
     if (downloadUrlValue == null || downloadUrlValue.isEmpty) {
-      throw const FormatException('Release asset is missing a download URL.');
+      throw const FormatException('رابط التنزيل غير موجود.');
     }
 
     final downloadUrl = Uri.parse(downloadUrlValue);
@@ -460,7 +437,7 @@ class GitHubUpdaterService {
     }
 
     throw FormatException(
-      'Required release asset not found. Tried: ${assetNames.join(', ')}',
+      'الملف المطلوب غير موجود في الإصدار. تم البحث عن: ${assetNames.join(', ')}',
     );
   }
 
@@ -495,15 +472,15 @@ class GitHubUpdaterService {
   }) {
     final parsed = value is int ? value : int.tryParse(value?.toString() ?? '');
     if (parsed == null) {
-      throw FormatException('Invalid integer value for $fieldName.');
+      throw FormatException('قيمة $fieldName غير صالحة.');
     }
 
     if (!allowZero && parsed <= 0) {
-      throw FormatException('$fieldName must be greater than zero.');
+      throw FormatException('$fieldName يجب أن يكون أكبر من صفر.');
     }
 
     if (allowZero && parsed < 0) {
-      throw FormatException('$fieldName cannot be negative.');
+      throw FormatException('$fieldName لا يمكن أن يكون سالباً.');
     }
 
     return parsed;
@@ -516,7 +493,7 @@ class GitHubUpdaterService {
     final normalized = value.trim().toLowerCase();
     final shaPattern = RegExp(r'^[a-f0-9]{64}$');
     if (!shaPattern.hasMatch(normalized)) {
-      throw FormatException('Invalid SHA-256 value for $fieldName.');
+      throw FormatException('بصمة SHA-256 غير صالحة لـ $fieldName.');
     }
     return normalized;
   }
@@ -527,7 +504,7 @@ class GitHubUpdaterService {
   }) {
     if (releaseNotes.trim().isEmpty) {
       throw FormatException(
-        'Release notes are empty. Missing SHA-256 for $assetName.',
+        'ملاحظات الإصدار فارغة. بصمة SHA-256 غير متوفرة لـ $assetName.',
       );
     }
 
@@ -535,11 +512,6 @@ class GitHubUpdaterService {
     final patterns = <RegExp>[
       RegExp(
         '^\\s*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*\$',
-        caseSensitive: false,
-        multiLine: true,
-      ),
-      RegExp(
-        '^\\s*SHA256[_\\-\\s]*$escapedAssetName\\s*[:=\\-|]\\s*([A-Fa-f0-9]{64})\\s*\$',
         caseSensitive: false,
         multiLine: true,
       ),
@@ -563,7 +535,7 @@ class GitHubUpdaterService {
     }
 
     throw FormatException(
-      'Unable to locate SHA-256 hash for $assetName in GitHub release notes.',
+      'تعذر العثور على بصمة SHA-256 لـ $assetName في ملاحظات الإصدار.',
     );
   }
 
@@ -571,7 +543,7 @@ class GitHubUpdaterService {
     if (uri.scheme.toLowerCase() != 'https' ||
         !_trustedHosts.contains(uri.host.toLowerCase())) {
       throw SecurityException(
-        'Untrusted update source rejected: ${uri.toString()}',
+        'مصدر تحديث غير موثوق: ${uri.toString()}',
       );
     }
   }
@@ -579,7 +551,7 @@ class GitHubUpdaterService {
   Map<String, String> get _defaultHeaders => const {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'CipherVault-Pro-Updater',
+        'User-Agent': 'Mahfadha-Pro-Updater',
       };
 
   void dispose() {

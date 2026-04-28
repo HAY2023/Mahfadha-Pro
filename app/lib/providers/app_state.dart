@@ -224,6 +224,22 @@ enum SidebarPage {
   settings,    // الإعدادات
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  [V6] Hardware Breathing Glow State — Dynamic UI Reactivity
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Drives the entire app's visual atmosphere based on hardware state.
+enum HardwareGlowState {
+  /// Ghost Mode — deep quiet Space Navy, slow breathing
+  ghost,
+
+  /// Unlocked — Cyan ripple effect, active glow
+  unlocked,
+
+  /// Thermal / Security Breach — red alarm pulsing
+  alert,
+}
+
 class AppState extends ChangeNotifier {
   bool _isDeviceConnected = false;
   bool _isSetupComplete = false;     // [FIX 5] يُحدَّث من رد الجهاز فقط

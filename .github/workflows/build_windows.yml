@@ -16,7 +16,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           
       - name: Build Python CLI Bridge (mahfadha_bridge.exe)
         run: |
@@ -45,21 +45,25 @@ jobs:
           flutter pub get
           flutter build windows --release
 
+      - name: Download VC++ Redistributable
+        shell: pwsh
+        run: |
+          $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          Write-Host "Downloading Visual C++ Redistributable..."
+          Invoke-WebRequest -Uri $vcRedistUrl -OutFile "installer\vc_redist.x64.exe" -UseBasicParsing
+          Write-Host "Downloaded vc_redist.x64.exe"
+
       - name: Prepare Installer Files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "installer\flutter-release"
 
-          # Find the Release directory containing the built exe
-          # Flutter outputs to: app\build\windows\x64\runner\Release\ (or without x64)
+          # Find the Release directory
           $releaseDir = $null
-
-          # Try x64 path first (newer Flutter versions)
           $x64Path = "app\build\windows\x64\runner\Release"
           if (Test-Path $x64Path) {
             $releaseDir = $x64Path
           } else {
-            # Fallback to non-x64 path
             $legacyPath = "app\build\windows\runner\Release"
             if (Test-Path $legacyPath) {
               $releaseDir = $legacyPath
@@ -68,20 +72,16 @@ jobs:
 
           if ($releaseDir) {
             Write-Host "Found Flutter release at: $releaseDir"
-            # List contents for debugging
             Get-ChildItem $releaseDir | ForEach-Object { Write-Host "  -> $($_.Name)" }
             Copy-Item "$releaseDir\*" "installer\flutter-release\" -Recurse
           } else {
             Write-Host "ERROR: Could not find Flutter release directory!"
-            Write-Host "Directory tree under app\build\windows:"
-            Get-ChildItem -Path "app\build\windows" -Recurse -Directory | ForEach-Object { Write-Host $_.FullName }
             exit 1
           }
 
-          # Verify the main exe exists in the copied files
+          # Rename exe to MahfadhaPro.exe
           $exeName = "MahfadhaPro.exe"
           if (-not (Test-Path "installer\flutter-release\$exeName")) {
-            Write-Host "WARNING: $exeName not found. Looking for available exe files..."
             $exeFiles = Get-ChildItem "installer\flutter-release\*.exe"
             if ($exeFiles.Count -gt 0) {
               $actualExe = $exeFiles[0].Name
@@ -105,4 +105,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Mahfadha-Pro-Installer
-          path: installer-output\CipherVaultPro_Setup.exe
+          path: installer-output\Mahfadha-Pro-Setup.exe
