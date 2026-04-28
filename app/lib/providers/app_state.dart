@@ -288,6 +288,11 @@ class AppState extends ChangeNotifier {
   double _systemLoad = 0.0;
   bool _isThermalEmergency = false;
 
+  // ══════════════════════════════════════════════════════════════
+  //  [V6] Hardware Breathing Glow State
+  // ══════════════════════════════════════════════════════════════
+  HardwareGlowState _hardwareGlowState = HardwareGlowState.ghost;
+
   // ── Getters ──
   bool get isDeviceConnected => _isDeviceConnected;
   bool get isSetupComplete => _isSetupComplete;
@@ -301,6 +306,28 @@ class AppState extends ChangeNotifier {
   double get storageUsed => _storageUsed;
   double get systemLoad => _systemLoad;
   bool get isThermalEmergency => _isThermalEmergency;
+
+  // ── [V6] Hardware Glow Getters ──
+  HardwareGlowState get hardwareGlowState => _hardwareGlowState;
+
+  /// Computed glow state based on current hardware status
+  HardwareGlowState get computedGlowState {
+    if (_isThermalEmergency) return HardwareGlowState.alert;
+    if (_isBiometricUnlocked) return HardwareGlowState.unlocked;
+    return HardwareGlowState.ghost;
+  }
+
+  void setHardwareGlowState(HardwareGlowState state) {
+    _hardwareGlowState = state;
+    notifyListeners();
+  }
+
+  void _syncGlowState() {
+    final newState = computedGlowState;
+    if (_hardwareGlowState != newState) {
+      _hardwareGlowState = newState;
+    }
+  }
 
   // ── [V2/V3] Biometric Vault Getters ──
   bool get isBiometricUnlocked => _isBiometricUnlocked;
@@ -386,11 +413,13 @@ class AppState extends ChangeNotifier {
 
   void _triggerThermalEmergency() {
     _isThermalEmergency = true;
+    _syncGlowState();
     notifyListeners();
   }
 
   void resetThermalEmergency() {
     _isThermalEmergency = false;
+    _syncGlowState();
     notifyListeners();
   }
 
@@ -447,6 +476,7 @@ class AppState extends ChangeNotifier {
   void onFingerprintVerified() {
     _isBiometricUnlocked = true;
     _biometricState = BiometricState.verified;
+    _syncGlowState();
     notifyListeners();
     debugPrint('[🛡️ أمان] تم فتح القبو — المصادقة الحيوية تمت بنجاح (FINGERPRINT_VERIFIED).');
   }
@@ -484,7 +514,8 @@ class AppState extends ChangeNotifier {
     _globalSensitiveEntries.clear();
     // Scrub phone vault
     _phoneVault.clear();
-    // Optional: Force Garbage Collection prompt if possible, or clear references
+    // [V6] Sync glow state back to ghost
+    _syncGlowState();
     notifyListeners();
     debugPrint('[🛡️ أمان] تم قفل القبو — جميع البيانات الحساسة مُحيت من الذاكرة.');
   }

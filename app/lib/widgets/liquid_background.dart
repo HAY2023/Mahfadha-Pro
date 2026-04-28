@@ -1,12 +1,27 @@
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/app_state.dart';
 import '../theme/mars_theme.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
-///  Liquid Background Animation — Deep Space Navy with flowing
-///  Cyan Neon liquid blobs that drift, pulse, and morph organically.
-///  Designed for the Mahfadha Pro sidebar and main content area.
+///  Liquid Background Animation — [V6] Hardware Breathing Glow
+///
+///  Reacts dynamically to the device's HardwareGlowState:
+///
+///  • GHOST MODE (locked):
+///    Deep quiet Space Navy (#0A0E14), very slow breathing opacity
+///    animation with dim cyan blobs.
+///
+///  • UNLOCKED (fingerprint OK):
+///    Cyan (#00FFFF) ripple effect from center, active glow,
+///    faster blob movement with brighter accents.
+///
+///  • THERMAL / BREACH ALERT:
+///    Fast-pulsing red (#FF0000) alarm state, all blobs turn red,
+///    entire background flashes with urgent border glow.
 /// ══════════════════════════════════════════════════════════════════════
 class LiquidBackground extends StatefulWidget {
   final Widget child;
@@ -22,10 +37,17 @@ class _LiquidBackgroundState extends State<LiquidBackground>
   late AnimationController _ctrl1;
   late AnimationController _ctrl2;
   late AnimationController _ctrl3;
+  late AnimationController _breathCtrl;
+  late AnimationController _rippleCtrl;
+  late AnimationController _alertCtrl;
+
+  HardwareGlowState _lastGlowState = HardwareGlowState.ghost;
 
   @override
   void initState() {
     super.initState();
+
+    // ── Standard liquid blob animation ──
     _ctrl1 = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
@@ -38,6 +60,24 @@ class _LiquidBackgroundState extends State<LiquidBackground>
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat();
+
+    // ── Slow breathing for Ghost Mode ──
+    _breathCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
+    // ── Fast ripple for Unlock transition ──
+    _rippleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    // ── Alert pulse — fast, aggressive ──
+    _alertCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
   }
 
   @override
@@ -45,63 +85,141 @@ class _LiquidBackgroundState extends State<LiquidBackground>
     _ctrl1.dispose();
     _ctrl2.dispose();
     _ctrl3.dispose();
+    _breathCtrl.dispose();
+    _rippleCtrl.dispose();
+    _alertCtrl.dispose();
     super.dispose();
+  }
+
+  void _onGlowStateChanged(HardwareGlowState newState) {
+    if (newState == _lastGlowState) return;
+    _lastGlowState = newState;
+
+    switch (newState) {
+      case HardwareGlowState.ghost:
+        _alertCtrl.stop();
+        _rippleCtrl.stop();
+        _breathCtrl.repeat(reverse: true);
+        break;
+      case HardwareGlowState.unlocked:
+        _alertCtrl.stop();
+        _rippleCtrl.forward(from: 0);
+        _breathCtrl.stop();
+        break;
+      case HardwareGlowState.alert:
+        _breathCtrl.stop();
+        _rippleCtrl.stop();
+        _alertCtrl.repeat(reverse: true);
+        break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: MarsTheme.spaceNavy,
+    return Consumer<AppState>(
+      builder: (context, appState, _) {
+        final glowState = appState.hardwareGlowState;
+        _onGlowStateChanged(glowState);
+
+        return AnimatedBuilder(
+          animation: Listenable.merge([
+            _ctrl1,
+            _ctrl2,
+            _ctrl3,
+            _breathCtrl,
+            _rippleCtrl,
+            _alertCtrl,
+          ]),
+          builder: (context, _) => _buildBackground(glowState),
+        );
+      },
+    );
+  }
+
+  Widget _buildBackground(HardwareGlowState glowState) {
+    // ── Select color palette based on hardware state ──
+    final Color blobColor;
+    final Color bgColor;
+    final double baseOpacity;
+    final double breathMultiplier;
+
+    switch (glowState) {
+      case HardwareGlowState.ghost:
+        blobColor = MarsTheme.cyanNeon;
+        bgColor = MarsTheme.spaceNavy;
+        baseOpacity = 0.03 + _breathCtrl.value * 0.03;
+        breathMultiplier = 0.6;
+        break;
+      case HardwareGlowState.unlocked:
+        blobColor = MarsTheme.cyanNeon;
+        bgColor = MarsTheme.spaceNavy;
+        baseOpacity = 0.06;
+        breathMultiplier = 1.0;
+        break;
+      case HardwareGlowState.alert:
+        blobColor = const Color(0xFFFF0000);
+        bgColor = const Color(0xFF0A0408);
+        baseOpacity = 0.08 + _alertCtrl.value * 0.06;
+        breathMultiplier = 1.5;
+        break;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      color: bgColor,
       child: Stack(
         fit: StackFit.expand,
         children: [
           // ── Liquid blob 1 — large, slow ──
-          AnimatedBuilder(
-            animation: Listenable.merge([_ctrl1, _ctrl2]),
-            builder: (_, __) => _buildBlob(
-              t1: _ctrl1.value,
-              t2: _ctrl2.value,
-              baseX: 0.7,
-              baseY: 0.2,
-              driftRadiusX: 0.15,
-              driftRadiusY: 0.1,
-              blobSize: 350,
-              opacity: 0.06,
-              blurRadius: 120,
-            ),
+          _buildBlob(
+            t1: _ctrl1.value,
+            t2: _ctrl2.value,
+            baseX: 0.7,
+            baseY: 0.2,
+            driftRadiusX: 0.15 * breathMultiplier,
+            driftRadiusY: 0.1 * breathMultiplier,
+            blobSize: 350,
+            opacity: baseOpacity,
+            blurRadius: 120,
+            color: blobColor,
           ),
 
           // ── Liquid blob 2 — medium, mid-speed ──
-          AnimatedBuilder(
-            animation: Listenable.merge([_ctrl2, _ctrl3]),
-            builder: (_, __) => _buildBlob(
-              t1: _ctrl2.value,
-              t2: _ctrl3.value,
-              baseX: 0.3,
-              baseY: 0.6,
-              driftRadiusX: 0.12,
-              driftRadiusY: 0.08,
-              blobSize: 280,
-              opacity: 0.05,
-              blurRadius: 100,
-            ),
+          _buildBlob(
+            t1: _ctrl2.value,
+            t2: _ctrl3.value,
+            baseX: 0.3,
+            baseY: 0.6,
+            driftRadiusX: 0.12 * breathMultiplier,
+            driftRadiusY: 0.08 * breathMultiplier,
+            blobSize: 280,
+            opacity: baseOpacity * 0.85,
+            blurRadius: 100,
+            color: blobColor,
           ),
 
           // ── Liquid blob 3 — small accent ──
-          AnimatedBuilder(
-            animation: Listenable.merge([_ctrl3, _ctrl1]),
-            builder: (_, __) => _buildBlob(
-              t1: _ctrl3.value,
-              t2: _ctrl1.value,
-              baseX: 0.5,
-              baseY: 0.8,
-              driftRadiusX: 0.1,
-              driftRadiusY: 0.12,
-              blobSize: 200,
-              opacity: 0.04,
-              blurRadius: 80,
-            ),
+          _buildBlob(
+            t1: _ctrl3.value,
+            t2: _ctrl1.value,
+            baseX: 0.5,
+            baseY: 0.8,
+            driftRadiusX: 0.1 * breathMultiplier,
+            driftRadiusY: 0.12 * breathMultiplier,
+            blobSize: 200,
+            opacity: baseOpacity * 0.7,
+            blurRadius: 80,
+            color: blobColor,
           ),
+
+          // ── [V6] Unlock Ripple Effect ──
+          if (_rippleCtrl.isAnimating || _rippleCtrl.value > 0)
+            _buildRipple(),
+
+          // ── [V6] Alert border glow ──
+          if (glowState == HardwareGlowState.alert)
+            _buildAlertBorder(),
 
           // ── Vignette overlay for depth ──
           IgnorePointer(
@@ -111,16 +229,78 @@ class _LiquidBackgroundState extends State<LiquidBackground>
                   radius: 1.3,
                   colors: [
                     Colors.transparent,
-                    MarsTheme.spaceNavy.withOpacity(0.8),
+                    bgColor.withOpacity(0.8),
                   ],
                 ),
               ),
             ),
           ),
 
+          // ── [V6] BackdropFilter — subtle blur ──
+          if (glowState == HardwareGlowState.ghost)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 0.5, sigmaY: 0.5),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+
           // ── Child content ──
           widget.child,
         ],
+      ),
+    );
+  }
+
+  Widget _buildRipple() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final centerX = constraints.maxWidth / 2;
+        final centerY = constraints.maxHeight / 2;
+        final maxRadius =
+            math.sqrt(centerX * centerX + centerY * centerY) * 2;
+        final currentRadius = _rippleCtrl.value * maxRadius;
+        final opacity = (1.0 - _rippleCtrl.value) * 0.25;
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _RipplePainter(
+                center: Offset(centerX, centerY),
+                radius: currentRadius,
+                color: MarsTheme.cyanNeon.withOpacity(opacity.clamp(0, 1)),
+                strokeWidth: 3 + (1 - _rippleCtrl.value) * 8,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAlertBorder() {
+    final opacity = 0.2 + _alertCtrl.value * 0.4;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFFFF0000).withOpacity(opacity),
+              width: 2 + _alertCtrl.value * 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color:
+                    const Color(0xFFFF0000).withOpacity(opacity * 0.5),
+                blurRadius: 30,
+                spreadRadius: -5,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -135,6 +315,7 @@ class _LiquidBackgroundState extends State<LiquidBackground>
     required double blobSize,
     required double opacity,
     required double blurRadius,
+    required Color color,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -158,15 +339,15 @@ class _LiquidBackgroundState extends State<LiquidBackground>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: MarsTheme.cyanNeon.withOpacity(opacity * 0.8),
+                  color: color.withOpacity(opacity * 0.8),
                   blurRadius: blurRadius,
                   spreadRadius: blurRadius * 0.3,
                 ),
               ],
               gradient: RadialGradient(
                 colors: [
-                  MarsTheme.cyanNeon.withOpacity(opacity),
-                  MarsTheme.cyanNeon.withOpacity(opacity * 0.3),
+                  color.withOpacity(opacity),
+                  color.withOpacity(opacity * 0.3),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.5, 1.0],
@@ -177,4 +358,43 @@ class _LiquidBackgroundState extends State<LiquidBackground>
       },
     );
   }
+}
+
+/// Custom painter for the unlock ripple effect
+class _RipplePainter extends CustomPainter {
+  final Offset center;
+  final double radius;
+  final Color color;
+  final double strokeWidth;
+
+  _RipplePainter({
+    required this.center,
+    required this.radius,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawCircle(center, radius, paint);
+
+    // Inner glow ring
+    final glowPaint = Paint()
+      ..color = color.withOpacity(color.opacity * 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth * 3
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+
+    canvas.drawCircle(center, radius, glowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RipplePainter oldDelegate) =>
+      oldDelegate.radius != radius ||
+      oldDelegate.color != color;
 }

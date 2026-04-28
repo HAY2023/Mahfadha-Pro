@@ -17,6 +17,7 @@ import 'screens/settings_screen.dart';
 import 'screens/setup_wizard.dart';
 import 'screens/update_center.dart';
 import 'screens/vault_screen.dart';
+import 'services/websocket_server_service.dart';
 import 'theme/mars_theme.dart';
 import 'widgets/app_title_bar.dart';
 import 'widgets/auto_lock_wrapper.dart';
@@ -98,14 +99,14 @@ class _CipherVaultAppState extends State<CipherVaultApp>
     with WindowListener, TrayListener {
   bool _isQuitting = false;
 
-  // ── [V4] Auto-Save Interceptor — local socket listener ──
-  ServerSocket? _autoSaveServer;
+  // ══ [V6] WebSocket Server — replaces old TCP socket listener ══
+  final WebSocketServerService _wsServer = WebSocketServerService();
 
   @override
   void initState() {
     super.initState();
     _initializeDesktopShell();
-    _startAutoSaveListener();
+    _startWebSocketServer();
   }
 
   Future<void> _initializeDesktopShell() async {
@@ -134,66 +135,33 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  [V4] Auto-Save Interceptor — Background Socket Listener
-  //  Listens on localhost:9847 for JSON credential payloads from
-  //  the Chrome extension's Native Messaging bridge.
+  //  [V6] WebSocket Server — Real Auto-Save Interceptor
+  //  Listens on ws://localhost:2050 for JSON credential payloads
+  //  from the Chrome Extension via WebSocket bridge.
+  //  Runs continuously even when the app is in the system tray.
   // ══════════════════════════════════════════════════════════════
 
-  Future<void> _startAutoSaveListener() async {
-    try {
-      _autoSaveServer = await ServerSocket.bind(
-        InternetAddress.loopbackIPv4,
-        9847,
-        shared: true,
+  Future<void> _startWebSocketServer() async {
+    _wsServer.onCredentialIntercepted = (url, username, password) {
+      if (!mounted) return;
+
+      final credential = InterceptedCredential(
+        targetUrl: url,
+        username: username,
+        password: password,
+        interceptedAt: DateTime.now(),
       );
-      debugPrint(
-          '[🔌 Auto-Save] Listening on localhost:9847 for credential intercepts.');
 
-      _autoSaveServer!.listen(
-        (socket) {
-          socket.listen((data) {
-            try {
-              final payload = utf8.decode(data).trim();
-              if (payload.isEmpty) return;
+      final appState = Provider.of<AppState>(context, listen: false);
+      appState.setPendingCredential(credential);
 
-              final json = jsonDecode(payload) as Map<String, dynamic>;
-              final url = json['url']?.toString() ?? '';
-              final username = json['username']?.toString() ?? '';
-              final password = json['password']?.toString() ?? '';
+      // Restore window so the user sees the dialog
+      _restorePrimaryWindow();
 
-              if (url.isNotEmpty && username.isNotEmpty && password.isNotEmpty) {
-                final credential = InterceptedCredential(
-                  targetUrl: url,
-                  username: username,
-                  password: password,
-                  interceptedAt: DateTime.now(),
-                );
+      debugPrint('[\uD83D\uDD0C WebSocket] Credential intercepted for: $url');
+    };
 
-                // Push to AppState for the dialog to pick up
-                final appState =
-                    Provider.of<AppState>(context, listen: false);
-                appState.setPendingCredential(credential);
-
-                // Restore the window so the user sees the dialog
-                _restorePrimaryWindow();
-
-                debugPrint(
-                    '[🔌 Auto-Save] Intercepted credential for: $url');
-              }
-
-              socket.write('{"status":"received"}');
-              socket.close();
-            } catch (e) {
-              debugPrint('[🔌 Auto-Save] Parse error: $e');
-              socket.close();
-            }
-          });
-        },
-        onError: (e) => debugPrint('[🔌 Auto-Save] Socket error: $e'),
-      );
-    } catch (e) {
-      debugPrint('[🔌 Auto-Save] Failed to start listener: $e');
-    }
+    await _wsServer.start();
   }
 
   Future<void> _hideToBackground() async {
@@ -204,7 +172,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   Future<void> _quitApplication() async {
     if (_isQuitting) return;
     _isQuitting = true;
-    _autoSaveServer?.close();
+    await _wsServer.stop();
     await trayManager.destroy();
     await windowManager.destroy();
   }
@@ -241,7 +209,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   void dispose() {
     trayManager.removeListener(this);
     windowManager.removeListener(this);
-    _autoSaveServer?.close();
+    _wsServer.stop();
     super.dispose();
   }
 
