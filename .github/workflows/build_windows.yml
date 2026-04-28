@@ -105,4 +105,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Mahfadha-Pro-Installer
-          path: installer-output\Mahfadha-Pro-Setup.exe
+          path: installer-output\CipherVaultPro_Setup.exe
