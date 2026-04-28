@@ -45,10 +45,10 @@ jobs:
           flutter pub get
           flutter build windows --release
 
-#      - name: Build firmware binary
-#        run: |
-#          cd firmware
-#          pio run
+      - name: Build firmware binary
+        run: |
+          cd firmware
+          pio run
 
       - name: Prepare release assets
         shell: pwsh
@@ -109,17 +109,17 @@ jobs:
           iscc "installer\setup.iss"
           Copy-Item "installer-output\CipherVaultPro_Setup.exe" "release-assets\" -Force
 
-#          $firmwarePath = "firmware\.pio\build\esp32-s3-devkitc-1\firmware.bin"
-#          if (-not (Test-Path $firmwarePath)) {
-#            Write-Host "ERROR: firmware.bin not found."
-#            exit 1
-#          }
-#          Copy-Item $firmwarePath "release-assets\firmware.bin" -Force
+          $firmwarePath = "firmware\.pio\build\esp32-s3-devkitc-1\firmware.bin"
+          if (-not (Test-Path $firmwarePath)) {
+            Write-Host "ERROR: firmware.bin not found."
+            exit 1
+          }
+          Copy-Item $firmwarePath "release-assets\firmware.bin" -Force
 
           $filesForHashes = @(
             "release-assets\CipherVaultPro_Setup.exe",
             "release-assets\CipherVault-Pro-Windows.zip"
-#            "release-assets\firmware.bin"
+            "release-assets\firmware.bin"
           )
 
           $hashMap = @{}
@@ -152,12 +152,12 @@ jobs:
                 sha256 = $hashMap["CipherVault-Pro-Windows.zip"]
                 size = (Get-Item "release-assets\CipherVault-Pro-Windows.zip").Length
               }
-#              firmware = @{
-#                name = "firmware.bin"
-#                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/firmware.bin"
-#                sha256 = $hashMap["firmware.bin"]
-#                size = (Get-Item "release-assets\firmware.bin").Length
-#              }
+              firmware = @{
+                name = "firmware.bin"
+                download_url = "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/releases/download/$releaseTag/firmware.bin"
+                sha256 = $hashMap["firmware.bin"]
+                size = (Get-Item "release-assets\firmware.bin").Length
+              }
             }
           }
 
@@ -169,7 +169,7 @@ jobs:
           $releaseNotes += "Release assets:"
           $releaseNotes += "- CipherVaultPro_Setup.exe"
           $releaseNotes += "- CipherVault-Pro-Windows.zip"
-#          $releaseNotes += "- firmware.bin"
+          $releaseNotes += "- firmware.bin"
           $releaseNotes += "- latest.json"
           $releaseNotes += ""
           $releaseNotes += "Manifest:"
@@ -187,7 +187,7 @@ jobs:
           path: |
             release-assets/CipherVaultPro_Setup.exe
             release-assets/CipherVault-Pro-Windows.zip
-#            release-assets/firmware.bin
+            release-assets/firmware.bin
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
 
@@ -198,7 +198,7 @@ jobs:
           files: |
             release-assets/CipherVaultPro_Setup.exe
             release-assets/CipherVault-Pro-Windows.zip
-#            release-assets/firmware.bin
+            release-assets/firmware.bin
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
           body_path: release-assets/release-notes.md
