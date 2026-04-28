@@ -10,8 +10,46 @@ import '../theme/mars_theme.dart';
 ///  2. Minimize/Close buttons are ALWAYS clickable (on top of drag area)
 ///  3. Branding is visible but does not intercept drag events
 /// ══════════════════════════════════════════════════════════════════════
-class AppTitleBar extends StatelessWidget {
+class AppTitleBar extends StatefulWidget {
   const AppTitleBar({super.key});
+
+  @override
+  State<AppTitleBar> createState() => _AppTitleBarState();
+}
+
+class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
+  bool _isMaximized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _checkMaximizedState();
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  Future<void> _checkMaximizedState() async {
+    final maximized = await windowManager.isMaximized();
+    if (mounted) {
+      setState(() {
+        _isMaximized = maximized;
+      });
+    }
+  }
+
+  @override
+  void onWindowMaximize() => setState(() => _isMaximized = true);
+
+  @override
+  void onWindowUnmaximize() => setState(() => _isMaximized = false);
+
+  @override
+  void onWindowRestore() => setState(() => _isMaximized = false);
 
   @override
   Widget build(BuildContext context) {
@@ -105,30 +143,49 @@ class AppTitleBar extends StatelessWidget {
             top: 0,
             bottom: 0,
             right: 8,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _TitleBarButton(
-                  icon: Icons.remove_rounded,
-                  tooltip: 'تصغير',
-                  hoverColor: MarsTheme.cyanNeon.withOpacity(0.1),
-                  iconColor: MarsTheme.textSecondary,
-                  onTap: () => windowManager.minimize(),
-                ),
-                const SizedBox(width: 4),
-                _TitleBarButton(
-                  icon: Icons.close_rounded,
-                  tooltip: 'إرسال إلى الخلفية',
-                  hoverColor: MarsTheme.error.withOpacity(0.15),
-                  iconColor: MarsTheme.textSecondary,
-                  iconHoverColor: MarsTheme.error,
-                  onTap: () async {
-                    // Hide to system tray — do NOT terminate the app
-                    await windowManager.setSkipTaskbar(true);
-                    await windowManager.hide();
-                  },
-                ),
-              ],
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _TitleBarButton(
+                    icon: Icons.remove_rounded,
+                    tooltip: 'تصغير',
+                    hoverColor: MarsTheme.cyanNeon.withOpacity(0.1),
+                    iconColor: MarsTheme.textSecondary,
+                    onTap: () => windowManager.minimize(),
+                  ),
+                  const SizedBox(width: 4),
+                  _TitleBarButton(
+                    icon: _isMaximized
+                        ? Icons.filter_none_rounded
+                        : Icons.crop_square_rounded,
+                    tooltip: _isMaximized ? 'استعادة' : 'تكبير',
+                    hoverColor: MarsTheme.cyanNeon.withOpacity(0.1),
+                    iconColor: MarsTheme.textSecondary,
+                    onTap: () async {
+                      if (await windowManager.isMaximized()) {
+                        await windowManager.unmaximize();
+                      } else {
+                        await windowManager.maximize();
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  _TitleBarButton(
+                    icon: Icons.close_rounded,
+                    tooltip: 'إغلاق',
+                    hoverColor: MarsTheme.error.withOpacity(0.15),
+                    iconColor: MarsTheme.textSecondary,
+                    iconHoverColor: MarsTheme.error,
+                    onTap: () async {
+                      // Hide to system tray — do NOT terminate the app
+                      await windowManager.setSkipTaskbar(true);
+                      await windowManager.hide();
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ],
