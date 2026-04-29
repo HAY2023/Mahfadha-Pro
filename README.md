@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
-![Version](https://img.shields.io/badge/Version-1.0.0--Ghost-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.2--Ghost-orange.svg)
 
 **Mahfadha Pro** is a next-generation, military-grade hardware password manager and Authenticator (TOTP) built for zero-trust environments. Designed in 2026, it operates entirely offline, using advanced cryptographic co-processors and biometric authentication to secure your digital life.
 
