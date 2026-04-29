@@ -94,6 +94,7 @@ Future<void> main(List<String> args) async {
 }
 
 class CipherVaultApp extends StatefulWidget {
+  static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   const CipherVaultApp({super.key});
 
   @override
@@ -222,6 +223,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: CipherVaultApp.scaffoldMessengerKey,
       title: 'CipherVault Pro',
       theme: MarsTheme.darkTheme,
       localizationsDelegates: const [
@@ -382,6 +384,15 @@ class _AutoSaveOverlay extends StatelessWidget {
                 state.addVaultAccount(newAccount);
                 state.clearPendingCredential();
                 Navigator.of(context, rootNavigator: true).pop();
+                
+                CipherVaultApp.scaffoldMessengerKey.currentState?.showSnackBar(
+                  SnackBar(
+                    content: Text('تم تشفير وحفظ حساب ${newAccount.name} بنجاح!'),
+                    backgroundColor: MarsTheme.success,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+
                 debugPrint(
                     '[🔌 Auto-Save] Credential saved for: ${credential.targetUrl}');
               },

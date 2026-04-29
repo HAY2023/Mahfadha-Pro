@@ -36,14 +36,13 @@ jobs:
       - name: Build CLI bridge
         run: |
           cd cli-bridge
-          pyinstaller --onefile --name mahfadha_bridge mahfadha_bridge.py
+          pyinstaller --onefile --name mahfadha_bridge --clean --noconsole mahfadha_bridge.py
 
       - name: Build Windows application
         run: |
           cd app
-          flutter create --platforms windows .
           flutter pub get
-          flutter build windows --release
+          flutter build windows --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
       - name: Download VC++ Redistributable
         shell: pwsh

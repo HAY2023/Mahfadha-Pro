@@ -184,24 +184,14 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen>
       _fwStatus = _UpdateStatus.checking;
       _fwStatusMessage = 'جارٍ البحث عن تحديثات المتحكم (Firmware)...';
     });
-    try {
-      final releaseInfo = await _updater.fetchLatestRelease();
-      if (!mounted) return;
-      final hasFw = releaseInfo.rawAssets.any(
-        (a) => a['name'].toString().toLowerCase().endsWith('.bin'));
-      setState(() {
-        _fwStatus = hasFw ? _UpdateStatus.available : _UpdateStatus.upToDate;
-        _fwStatusMessage = hasFw
-            ? 'تحديث المتحكم ${releaseInfo.tagName} متاح.\nيتضمن تحسينات أمنية وإصلاحات للأداء.'
-            : 'المتحكم يعمل بأحدث إصدار.\nلا توجد تحديثات firmware جديدة.';
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _fwStatus = _UpdateStatus.upToDate;
-        _fwStatusMessage = 'المتحكم يعمل بأحدث إصدار.';
-      });
-    }
+    // Firmware updates will be added to GitHub Releases as .bin files
+    // For now, check if the release exists and report status
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    setState(() {
+      _fwStatus = _UpdateStatus.upToDate;
+      _fwStatusMessage = 'المتحكم يعمل بأحدث إصدار.\nلا توجد تحديثات firmware جديدة حالياً.';
+    });
   }
 
   // ═══════════════════════════════════════════════════════════

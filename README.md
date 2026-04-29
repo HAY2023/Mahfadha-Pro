@@ -4,109 +4,163 @@
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
 ![Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)
 
-**Mahfadha Pro** is a next-generation, military-grade hardware password manager and Authenticator (TOTP) built for zero-trust environments. Designed in 2026, it operates entirely offline, using advanced cryptographic co-processors and biometric authentication to secure your digital life.
-
-## 🌌 Project Philosophy
-1. **Zero Persistence:** Sensitive data (passwords, encryption keys, decrypted payloads) is **never** stored on the host PC. Data exists momentarily in RAM during transfer and is wiped immediately.
-2. **Ghost Mode (Stealth Serial):** The hardware device (ESP32-S3) is invisible to standard serial monitors. It remains silent and ignores all incoming traffic until a mathematically complex 64-character SHA-256 Handshake Token is provided.
-3. **Hardware-Enforced Security:** Uses the ATECC608A Secure Element to handle AES-256-GCM encryption. The master key never touches the ESP32's volatile or non-volatile memory.
+**Mahfadha Pro** — مدير كلمات مرور مادي متقدم بتشفير عسكري وحماية حيوية. يعمل دون اتصال بالإنترنت نهائياً.
 
 ---
 
-## 📁 Repository Structure
+## 📋 متغيرات الإصدار (للنسخ السريع)
 
-### 🔌 `/firmware` (ESP32-S3 / C++)
-The core brain of the device.
-* **Biometrics:** GROW R503 Fingerprint sensor integration.
-* **Crypto:** ATECC608A (CryptoAuthLib) & PBKDF2 Key Derivation.
-* **Navigation:** Interrupt-driven Rotary Encoder (Jog Dial).
-* **Self-Destruct:** Formats all NVM partitions and locks ATECC608A if brute-forced (15 failed attempts).
+عند إصدار نسخة جديدة، قم بتحديث هذه القيم في جميع الملفات:
 
-### 🖥️ `/app` (Flutter / Dart)
-The companion application for Windows/macOS/Linux.
-* **Frosted Glass UI:** A stunning, modern, and immersive 2026 aesthetic.
-* **Migration Tool:** Encrypts and imports CSV files from Bitwarden and Chrome.
-* **Zero-Knowledge Backup:** Exports/Imports `.mahfadha` encrypted blobs.
-* **Dashboard Controller:** Live telemetry (temperature, storage, system load) with circular gauges.
-* **OTA Update System:** Secure self-update via GitHub Releases with SHA-256 verification — app exits automatically during install.
+```yaml
+# app/pubspec.yaml
+version: 1.0.2
+```
 
-### 🌉 `/cli-bridge` (Python)
-The secure middleware.
-* Acts as the exclusive translator between the Flutter App and the Hardware.
-* Manages the "Secret Handshake" protocol.
+```dart
+// app/lib/screens/update_center.dart
+static const String _currentDesktopVersion = '1.0.2';
+```
+
+```dart
+// app/lib/screens/settings_screen.dart  (قسم "حول التطبيق")
+subtitle: '1.0.2',
+```
+
+```pascal
+// installer/setup.iss
+#define MyAppVersion "1.0.2"
+```
+
+```bash
+# أوامر الإصدار
+git tag v1.0.2
+git push origin v1.0.2
+```
 
 ---
 
-## 🎛️ Dashboard Controller
+## 🔧 متغيرات التطبيق الأساسية
 
-The dashboard (`/app/lib/screens/dashboard.dart`) provides:
+```dart
+// ── GitHub Updater Config ──
+const String owner = 'HAY2023';
+const String repository = 'Mahfadha-Pro';
+const String manifestAsset = 'latest.json';
+const List<String> appAssets = [
+  'Mahfadha-Pro-Setup.exe',
+  'MahfadhaPro.exe',
+  'Mahfadha-Pro-Windows.zip',
+];
 
-| Feature | Description |
+// ── Window Config ──
+const Size windowSize = Size(1180, 780);
+const Size minimumSize = Size(980, 680);
+const String windowTitle = 'CipherVault Pro';
+
+// ── WebSocket Server ──
+const int wsPort = 2050;
+const String wsHost = '127.0.0.1';
+// ws://127.0.0.1:2050
+
+// ── Auto-Lock ──
+const Duration autoLockTimeout = Duration(seconds: 180);
+const int warningThreshold = 30; // seconds
+
+// ── Security ──
+const String encryptionAlgorithm = 'AES-256-GCM';
+const String keyDerivation = 'PBKDF2';
+const String secureElement = 'ATECC608A';
+const String fingerprintSensor = 'GROW R503';
+const String hashAlgorithm = 'SHA-256';
+```
+
+---
+
+## 📁 هيكل المشروع
+
+```
+Mahfadha-Pro/
+├── app/                      # تطبيق Flutter Desktop
+│   ├── lib/
+│   │   ├── main.dart                    # نقطة الدخول + Window Manager
+│   │   ├── providers/app_state.dart     # إدارة الحالة (Provider)
+│   │   ├── screens/
+│   │   │   ├── connection_gate.dart     # بوابة الاتصال بالجهاز
+│   │   │   ├── dashboard.dart           # لوحة التحكم الرئيسية
+│   │   │   ├── update_center.dart       # مركز التحديثات (تطبيق + متحكم)
+│   │   │   ├── vault_screen.dart        # القبو الحساس (بصمة)
+│   │   │   ├── settings_screen.dart     # الإعدادات
+│   │   │   └── csv_importer_and_health.dart
+│   │   ├── services/
+│   │   │   ├── github_updater_service.dart  # خدمة التحديث الآمن
+│   │   │   └── websocket_server_service.dart # خادم الاعتراض
+│   │   ├── widgets/
+│   │   │   ├── app_title_bar.dart       # شريط العنوان المخصص
+│   │   │   ├── sidebar.dart             # القائمة الجانبية
+│   │   │   ├── auto_save_dialog.dart    # حوار الحفظ التلقائي
+│   │   │   ├── auto_lock_wrapper.dart   # القفل التلقائي
+│   │   │   └── liquid_background.dart   # الخلفية المتحركة
+│   │   └── theme/mars_theme.dart        # نظام التصميم
+│   └── pubspec.yaml
+├── firmware/                 # ESP32-S3 Firmware (PlatformIO)
+├── cli-bridge/               # Python Serial Bridge
+├── installer/setup.iss       # Inno Setup Installer
+└── .github/workflows/
+    └── release.yml           # CI/CD Pipeline
+```
+
+---
+
+## 🎛️ مركز التحديثات
+
+يدعم تابين:
+
+| تاب | الوظيفة |
 |---|---|
-| **Live Telemetry** | Real-time temperature, storage usage, and system load from ESP32 |
-| **Thermal Protection** | Auto-shutdown at 60°C with full data wipe |
-| **Operations Grid** | Quick access to all device operations (add account, sync time, backup, etc.) |
-| **Password Health** | Analyzes imported passwords for weak/reused entries |
-| **Scrollable Layout** | All sections visible without overflow on any screen size |
+| **تحديث التطبيق** | تنزيل وتثبيت Mahfadha-Pro-Setup.exe مع SHA-256 |
+| **تحديث المتحكم** | فحص تحديثات firmware الـ ESP32-S3 عبر OTA |
 
-### 🔄 OTA Update Flow
-
-The update system (`/app/lib/screens/update_center.dart` + `/app/lib/services/github_updater_service.dart`):
-
-1. **Check** → Fetches `latest.json` manifest from GitHub Releases
-2. **Download** → Streams the `.exe` installer with progress tracking
-3. **Verify** → SHA-256 checksum validation (file deleted on mismatch)
-4. **Install** → Confirmation dialog → launches installer → **app exits automatically**
+### 🔄 تدفق تحديث التطبيق
+1. **فحص** → `latest.json` من GitHub Releases
+2. **تنزيل** → `.exe` مع شريط تقدم
+3. **تحقق** → SHA-256 checksum
+4. **حوار تأكيد** → تحذير بإغلاق التطبيق
+5. **تثبيت** → تشغيل المثبت + `exit(0)`
 
 ---
 
-## 🚀 Getting Started
+## 🔌 نظام الحفظ التلقائي (Auto-Save)
 
-### 📥 Download the Pre-built `.exe` (Windows)
-The easiest way to get started on Windows is to download the pre-built binaries:
-1. Go to the [Releases](../../releases) page on GitHub.
-2. Download `Mahfadha-Pro-Setup.exe` from the latest release.
-3. Run the installer and complete setup.
-4. If you need the portable package, download `Mahfadha-Pro-Windows.zip`.
+عند دخول موقع ويب وإدخال بيانات تسجيل الدخول:
 
-> **Note:** GitHub Actions automatically builds and publishes `Mahfadha-Pro-Setup.exe`, `Mahfadha-Pro-Windows.zip`, and `latest.json` whenever a new Git tag like `v1.2.0` is pushed.
-
----
-
-### 1. Flash the Firmware
-1. Navigate to `/firmware`.
-2. Open with VS Code + PlatformIO.
-3. Build and upload to your ESP32-S3.
-
-### 2. Run the Secure Bridge
-1. Navigate to `/cli-bridge`.
-2. Install requirements (if any).
-3. Run the bridge:
-   ```bash
-   python mahfadha_bridge.py --connect --port COM3 --session-auth
-   ```
-
-### 3. Launch the App
-1. Navigate to `/app`.
-2. Run `flutter pub get`.
-3. Launch desktop app: `flutter run -d windows` (or macos/linux).
+1. إضافة Chrome ترسل البيانات عبر Native Messaging
+2. `mahfadha_bridge.exe` يستقبل ويُعيد التوجيه
+3. `WebSocketServerService` على `ws://127.0.0.1:2050` يستقبل
+4. `_AutoSaveOverlay` يكتشف `pendingCredential` في `AppState`
+5. `AutoSaveDialog` يظهر فوراً مع خيارات:
+   - **تشفير وحفظ** → يُرسل إلى ESP32 عبر AES-256-GCM
+   - **تجاهل** → يمسح البيانات من الذاكرة فوراً
 
 ---
 
-## 🔖 Releasing a New Version
+## 🚀 التشغيل
 
-1. Update `version:` in `app/pubspec.yaml`
-2. Update `MyAppVersion` in `installer/setup.iss`
-3. Update `_currentDesktopVersion` in `app/lib/screens/update_center.dart`
-4. Update version in `app/lib/screens/settings_screen.dart`
-5. Commit, then push a tag:
-   ```bash
-   git tag v1.0.3
-   git push origin v1.0.3
-   ```
-6. GitHub Actions will build and publish the release automatically.
+```bash
+# 1. تشغيل التطبيق (تطوير)
+cd app
+flutter pub get
+flutter run -d windows
+
+# 2. بناء للإنتاج
+flutter build windows --release
+
+# 3. إصدار جديد
+git tag v1.0.3
+git push origin v1.0.3
+```
 
 ---
 
-## ⚠️ Security Warning
-Do not lose your Master PIN or your hardware device. Because Mahfadha Pro uses the ATECC608A Secure Element, **there is absolutely no backdoor**. If the hardware is destroyed and no `.mahfadha` backup exists, your data is mathematically unrecoverable.
+## ⚠️ تحذير أمني
+لا تفقد رقم التعريف الشخصي أو جهازك المادي. بسبب استخدام ATECC608A Secure Element، **لا يوجد باب خلفي مطلقاً**. إذا دُمّر الجهاز بدون نسخة احتياطية `.mahfadha`، فالبيانات غير قابلة للاسترداد رياضياً.
