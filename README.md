@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
-![Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.3-orange.svg)
 
 **Mahfadha Pro** — مدير كلمات مرور مادي متقدم بتشفير عسكري وحماية حيوية. يعمل دون اتصال بالإنترنت نهائياً.
 
@@ -13,29 +13,29 @@
 عند إصدار نسخة جديدة، قم بتحديث هذه القيم في جميع الملفات:
 
 ```yaml
-
-
+# app/pubspec.yaml
+version: 1.0.3
 ```
 
 ```dart
 // app/lib/screens/update_center.dart
-static const String _currentDesktopVersion = '1.0.2';
+static const String _currentDesktopVersion = '1.0.3';
 ```
 
 ```dart
 // app/lib/screens/settings_screen.dart  (قسم "حول التطبيق")
-subtitle: '1.0.2',
+subtitle: '1.0.3',
 ```
 
 ```pascal
 // installer/setup.iss
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 ```
 
 ```bash
 # أوامر الإصدار
-git tag v1.0.2
-git push origin v1.0.2
+git tag v1.0.3
+git push origin v1.0.3
 ```
 
 ---

@@ -185,7 +185,7 @@ class SettingsScreen extends StatelessWidget {
                           _settingsTile(
                             icon: Icons.code_rounded,
                             title: 'الإصدار',
-                            subtitle: '1.0.2',
+                            subtitle: '1.0.3',
                           ),
                           _settingsTile(
                             icon: Icons.business_rounded,

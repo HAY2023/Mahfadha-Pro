@@ -17,7 +17,7 @@ class UpdateCenterScreen extends StatefulWidget {
 
 class _UpdateCenterScreenState extends State<UpdateCenterScreen>
     with SingleTickerProviderStateMixin {
-  static const String _currentDesktopVersion = '1.0.2';
+  static const String _currentDesktopVersion = '1.0.3';
 
   final GitHubUpdaterService _updater = GitHubUpdaterService(owner: 'HAY2023');
 

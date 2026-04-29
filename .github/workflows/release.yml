@@ -38,11 +38,16 @@ jobs:
           cd cli-bridge
           pyinstaller --onefile --name mahfadha_bridge --clean --noconsole mahfadha_bridge.py
 
+      - name: Generate Windows platform files
+        run: |
+          cd app
+          flutter create --platforms=windows .
+
       - name: Build Windows application
         run: |
           cd app
           flutter pub get
-          flutter build windows --release --obfuscate --split-debug-info=build/app/outputs/symbols
+          flutter build windows --release
 
       - name: Download VC++ Redistributable
         shell: pwsh
