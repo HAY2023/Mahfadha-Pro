@@ -1,2 +1,0 @@
-# This workflow is superseded by release.yml
-# Kept as placeholder — all builds are triggered via release.yml on tag push (v*)
