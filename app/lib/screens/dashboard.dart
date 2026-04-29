@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -423,17 +422,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildHeader(connected),
             const SizedBox(height: 16),
             Expanded(
-              child: Column(
-                children: [
-                  // ── [V5] Telemetry Monitor ──
-                  Consumer<AppState>(
-                    builder: (context, state, _) {
-                      return _buildPerformanceMonitor(state);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: Container(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // ── [V5] Telemetry Monitor ──
+                    Consumer<AppState>(
+                      builder: (context, state, _) {
+                        return _buildPerformanceMonitor(state);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // ── Operations Grid ──
+                    Container(
                       decoration: MarsTheme.glassCard(borderRadius: 24),
                       padding: const EdgeInsets.all(24),
                       child: Column(
@@ -443,14 +443,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: MarsTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w700,
                           )),
                           const SizedBox(height: 18),
-                          Expanded(child: _buildOperationsGrid()),
+                          SizedBox(
+                            height: 220,
+                            child: _buildOperationsGrid(),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  const PasswordHealthDashboard(),
-                ],
+                    const SizedBox(height: 12),
+                    const PasswordHealthDashboard(),
+                  ],
+                ),
               ),
             ),
           ],

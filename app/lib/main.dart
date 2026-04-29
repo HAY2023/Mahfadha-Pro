@@ -73,9 +73,14 @@ Future<void> main(List<String> args) async {
     title: 'CipherVault Pro',
   );
 
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.setTitle('CipherVault Pro');
-    await windowManager.setIcon(_resolveDesktopAssetPath(_trayIconIcoPath));
+    try {
+      await windowManager.setIcon(_resolveDesktopAssetPath(_trayIconIcoPath));
+    } catch (_) {
+      // Icon may not exist in dev mode — ignore
+    }
+    await windowManager.setSkipTaskbar(false);
     await windowManager.show();
     await windowManager.focus();
   });

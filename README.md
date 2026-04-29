@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
-![Version](https://img.shields.io/badge/Version-1.0.2--Ghost-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)
 
 **Mahfadha Pro** is a next-generation, military-grade hardware password manager and Authenticator (TOTP) built for zero-trust environments. Designed in 2026, it operates entirely offline, using advanced cryptographic co-processors and biometric authentication to secure your digital life.
 
@@ -27,11 +27,36 @@ The companion application for Windows/macOS/Linux.
 * **Frosted Glass UI:** A stunning, modern, and immersive 2026 aesthetic.
 * **Migration Tool:** Encrypts and imports CSV files from Bitwarden and Chrome.
 * **Zero-Knowledge Backup:** Exports/Imports `.mahfadha` encrypted blobs.
+* **Dashboard Controller:** Live telemetry (temperature, storage, system load) with circular gauges.
+* **OTA Update System:** Secure self-update via GitHub Releases with SHA-256 verification — app exits automatically during install.
 
 ### 🌉 `/cli-bridge` (Python)
 The secure middleware.
 * Acts as the exclusive translator between the Flutter App and the Hardware.
 * Manages the "Secret Handshake" protocol.
+
+---
+
+## 🎛️ Dashboard Controller
+
+The dashboard (`/app/lib/screens/dashboard.dart`) provides:
+
+| Feature | Description |
+|---|---|
+| **Live Telemetry** | Real-time temperature, storage usage, and system load from ESP32 |
+| **Thermal Protection** | Auto-shutdown at 60°C with full data wipe |
+| **Operations Grid** | Quick access to all device operations (add account, sync time, backup, etc.) |
+| **Password Health** | Analyzes imported passwords for weak/reused entries |
+| **Scrollable Layout** | All sections visible without overflow on any screen size |
+
+### 🔄 OTA Update Flow
+
+The update system (`/app/lib/screens/update_center.dart` + `/app/lib/services/github_updater_service.dart`):
+
+1. **Check** → Fetches `latest.json` manifest from GitHub Releases
+2. **Download** → Streams the `.exe` installer with progress tracking
+3. **Verify** → SHA-256 checksum validation (file deleted on mismatch)
+4. **Install** → Confirmation dialog → launches installer → **app exits automatically**
 
 ---
 
@@ -44,7 +69,7 @@ The easiest way to get started on Windows is to download the pre-built binaries:
 3. Run the installer and complete setup.
 4. If you need the portable package, download `Mahfadha-Pro-Windows.zip`.
 
-> **Note:** GitHub Actions automatically builds and publishes `Mahfadha-Pro-Setup.exe`, `Mahfadha-Pro-Windows.zip`, and `firmware.bin` whenever a new Git tag like `v1.2.0` is pushed.
+> **Note:** GitHub Actions automatically builds and publishes `Mahfadha-Pro-Setup.exe`, `Mahfadha-Pro-Windows.zip`, and `latest.json` whenever a new Git tag like `v1.2.0` is pushed.
 
 ---
 
@@ -65,6 +90,21 @@ The easiest way to get started on Windows is to download the pre-built binaries:
 1. Navigate to `/app`.
 2. Run `flutter pub get`.
 3. Launch desktop app: `flutter run -d windows` (or macos/linux).
+
+---
+
+## 🔖 Releasing a New Version
+
+1. Update `version:` in `app/pubspec.yaml`
+2. Update `MyAppVersion` in `installer/setup.iss`
+3. Update `_currentDesktopVersion` in `app/lib/screens/update_center.dart`
+4. Update version in `app/lib/screens/settings_screen.dart`
+5. Commit, then push a tag:
+   ```bash
+   git tag v1.0.3
+   git push origin v1.0.3
+   ```
+6. GitHub Actions will build and publish the release automatically.
 
 ---
 

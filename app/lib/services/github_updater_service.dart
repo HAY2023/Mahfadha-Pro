@@ -246,14 +246,18 @@ class GitHubUpdaterService {
   }
 
   /// ──────────────────────────────────────────────────────────────────
-  ///  Apply downloaded app update (launch installer)
+  ///  Apply downloaded app update (launch installer + exit app)
   /// ──────────────────────────────────────────────────────────────────
   Future<void> applyAppUpdate(VerifiedDownloadResult result) async {
     final file = result.file;
     final path = file.path.toLowerCase();
 
     if (path.endsWith('.exe')) {
+      // Launch installer detached then exit the app so it can be replaced
       await Process.start(file.path, [], mode: ProcessStartMode.detached);
+      // Give the installer a moment to start, then exit
+      await Future.delayed(const Duration(milliseconds: 500));
+      exit(0);
     } else if (path.endsWith('.zip')) {
       final dir = file.parent.path;
       await Process.start('explorer', [dir],

@@ -5,10 +5,11 @@ import 'package:window_manager/window_manager.dart';
 import '../theme/mars_theme.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
-///  Custom Title Bar — [V4 FIX] Proper Stack layout ensuring:
+///  Custom Title Bar — [V5 FIX] Window controls on LEFT (Windows standard)
 ///  1. Window dragging works on the ENTIRE title bar area
-///  2. Minimize/Close buttons are ALWAYS clickable (on top of drag area)
-///  3. Branding is visible but does not intercept drag events
+///  2. Close/Maximize/Minimize are ALWAYS clickable (on top of drag area)
+///  3. Branding is visible on the right side (RTL layout)
+///  4. Button order: Close | Maximize | Minimize (left to right)
 /// ══════════════════════════════════════════════════════════════════════
 class AppTitleBar extends StatefulWidget {
   const AppTitleBar({super.key});
@@ -88,29 +89,14 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
             ),
           ),
 
-          // ── Layer 2: Branding (left side, non-interactive) ──
+          // ── Layer 2: Branding (right side for RTL, non-interactive) ──
           Positioned.fill(
             child: IgnorePointer(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    const Icon(
-                      Icons.memory_rounded,
-                      color: MarsTheme.cyanNeon,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'CipherVault Pro',
-                      style: GoogleFonts.inter(
-                        color: MarsTheme.cyanNeon,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -132,28 +118,49 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'CipherVault Pro',
+                      style: GoogleFonts.inter(
+                        color: MarsTheme.cyanNeon,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.memory_rounded,
+                      color: MarsTheme.cyanNeon,
+                      size: 16,
+                    ),
                   ],
                 ),
               ),
             ),
           ),
 
-          // ── Layer 3: Window control buttons (right side, CLICKABLE) ──
+          // ── Layer 3: Window control buttons (LEFT side, CLICKABLE) ──
           Positioned(
             top: 0,
             bottom: 0,
-            right: 8,
+            left: 8,
             child: Directionality(
               textDirection: TextDirection.ltr,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _TitleBarButton(
-                    icon: Icons.remove_rounded,
-                    tooltip: 'تصغير',
-                    hoverColor: MarsTheme.cyanNeon.withOpacity(0.1),
+                    icon: Icons.close_rounded,
+                    tooltip: 'إغلاق',
+                    hoverColor: MarsTheme.error.withOpacity(0.15),
                     iconColor: MarsTheme.textSecondary,
-                    onTap: () => windowManager.minimize(),
+                    iconHoverColor: MarsTheme.error,
+                    onTap: () async {
+                      // Hide to system tray — do NOT terminate the app
+                      await windowManager.setSkipTaskbar(true);
+                      await windowManager.hide();
+                    },
                   ),
                   const SizedBox(width: 4),
                   _TitleBarButton(
@@ -173,16 +180,11 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                   ),
                   const SizedBox(width: 4),
                   _TitleBarButton(
-                    icon: Icons.close_rounded,
-                    tooltip: 'إغلاق',
-                    hoverColor: MarsTheme.error.withOpacity(0.15),
+                    icon: Icons.remove_rounded,
+                    tooltip: 'تصغير',
+                    hoverColor: MarsTheme.cyanNeon.withOpacity(0.1),
                     iconColor: MarsTheme.textSecondary,
-                    iconHoverColor: MarsTheme.error,
-                    onTap: () async {
-                      // Hide to system tray — do NOT terminate the app
-                      await windowManager.setSkipTaskbar(true);
-                      await windowManager.hide();
-                    },
+                    onTap: () => windowManager.minimize(),
                   ),
                 ],
               ),
