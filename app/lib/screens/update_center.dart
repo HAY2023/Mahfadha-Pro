@@ -17,8 +17,6 @@ class UpdateCenterScreen extends StatefulWidget {
 
 class _UpdateCenterScreenState extends State<UpdateCenterScreen>
     with SingleTickerProviderStateMixin {
-  static const String _currentDesktopVersion = 'v1.0.0';
-
   final GitHubUpdaterService _updater = GitHubUpdaterService(owner: 'HAY2023');
 
   GitHubReleaseInfo? _releaseInfo;
@@ -341,7 +339,7 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen>
         ]),
         const SizedBox(height: 24),
         Row(children: [
-          Expanded(child: _infoTile(Icons.local_offer_rounded, 'إصدار التطبيق', _currentDesktopVersion)),
+          Expanded(child: _infoTile(Icons.local_offer_rounded, 'إصدار التطبيق', context.watch<AppState>().appVersion)),
           const SizedBox(width: 12),
           Expanded(child: _infoTile(Icons.new_releases_rounded, 'الإصدار المتاح', _releaseInfo?.tagName ?? '-', highlight: _releaseInfo != null)),
           const SizedBox(width: 12),

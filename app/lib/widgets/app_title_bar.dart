@@ -120,7 +120,7 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'CipherVault Pro',
+                      'Mahfadha Pro',
                       style: GoogleFonts.inter(
                         color: MarsTheme.cyanNeon,
                         fontSize: 12,

@@ -197,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
                           _settingsTile(
                             icon: Icons.code_rounded,
                             title: 'الإصدار',
-                            subtitle: '1.0.3',
+                            subtitle: context.watch<AppState>().appVersion,
                           ),
                           _settingsTile(
                             icon: Icons.business_rounded,

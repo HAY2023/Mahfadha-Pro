@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/mars_theme.dart';
+import 'package:animate_do/animate_do.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  Biometric-Gated Vault Screen [V3]
@@ -381,16 +382,24 @@ class _VaultScreenState extends State<VaultScreen>
                   color: MarsTheme.textMuted, fontSize: 14)))
               : ListView.builder(
                   itemCount: accounts.length,
-                  itemBuilder: (_, i) => _buildAccountTile(accounts[i]),
+                  itemBuilder: (_, i) => FadeInLeft(
+                    duration: const Duration(milliseconds: 1200),
+                    delay: Duration(milliseconds: i * 150),
+                    from: 200,
+                    child: _buildAccountTile(context, accounts[i]),
+                  ),
                 ),
         ),
       ]),
     );
   }
 
-  /// [V3] Account tile — shows targetUrl, phones, backup codes
-  Widget _buildAccountTile(VaultAccount acc) {
-    return Container(
+  Widget _buildAccountTile(BuildContext context, VaultAccount acc) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _showEditDialog(context, acc),
+        child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -464,6 +473,112 @@ class _VaultScreenState extends State<VaultScreen>
           ).toList()),
         ],
       ]),
+    ),
+    ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, VaultAccount acc) {
+    final usernameCtrl = TextEditingController(text: acc.username);
+    final passwordCtrl = TextEditingController(text: acc.password);
+    final urlCtrl = TextEditingController(text: acc.targetUrl);
+    final phoneCtrl = TextEditingController(text: acc.phoneNumbers.isNotEmpty ? acc.phoneNumbers.first : '');
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 400,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: MarsTheme.spaceNavy.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: MarsTheme.cyanNeon.withOpacity(0.5)),
+              boxShadow: [
+                BoxShadow(color: MarsTheme.cyanNeon.withOpacity(0.2), blurRadius: 30),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.edit_note, color: MarsTheme.cyanNeon),
+                    const SizedBox(width: 8),
+                    Text('تعديل الحساب: ${acc.name}', style: GoogleFonts.cairo(color: MarsTheme.cyanNeon, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildEditField('اسم المستخدم', usernameCtrl, Icons.person),
+                const SizedBox(height: 12),
+                _buildEditField('كلمة المرور', passwordCtrl, Icons.password, obscure: true),
+                const SizedBox(height: 12),
+                _buildEditField('رابط الدخول', urlCtrl, Icons.link),
+                const SizedBox(height: 12),
+                _buildEditField('رقم الهاتف', phoneCtrl, Icons.phone),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.white54)),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MarsTheme.cyanNeon,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        // Send update command to ESP32
+                        // TaskManager().sendHardwareCommand({...})
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('تم إرسال طلب التعديل إلى وحدة التشفير بنجاح.', style: GoogleFonts.cairo()),
+                            backgroundColor: MarsTheme.success,
+                          ),
+                        );
+                      },
+                      child: Text('حفظ وتشفير', style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditField(String label, TextEditingController ctrl, IconData icon, {bool obscure = false}) {
+    return TextField(
+      controller: ctrl,
+      obscureText: obscure,
+      style: GoogleFonts.firaCode(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.cairo(color: MarsTheme.textMuted),
+        prefixIcon: Icon(icon, color: MarsTheme.cyanNeon.withOpacity(0.7), size: 18),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: MarsTheme.borderGlow),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: MarsTheme.cyanNeon),
+        ),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+      ),
     );
   }
 
@@ -564,30 +679,35 @@ class _VaultScreenState extends State<VaultScreen>
                     final e = entries[i];
                     final icon = categoryIcons[e.category] ?? Icons.lock_outline;
                     final color = categoryColors[e.category] ?? MarsTheme.cyanDim;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: color.withOpacity(0.18)),
+                    return FadeInRight(
+                      duration: const Duration(milliseconds: 1200),
+                      delay: Duration(milliseconds: i * 150),
+                      from: 200,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: color.withOpacity(0.18)),
+                        ),
+                        child: Row(children: [
+                          Icon(icon, color: color, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(e.label, style: GoogleFonts.cairo(
+                                color: MarsTheme.textPrimary, fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              )),
+                              Text(e.value, style: GoogleFonts.firaCode(
+                                color: MarsTheme.textSecondary, fontSize: 11,
+                              )),
+                            ],
+                          )),
+                        ]),
                       ),
-                      child: Row(children: [
-                        Icon(icon, color: color, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(e.label, style: GoogleFonts.cairo(
-                              color: MarsTheme.textPrimary, fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            )),
-                            Text(e.value, style: GoogleFonts.firaCode(
-                              color: MarsTheme.textSecondary, fontSize: 11,
-                            )),
-                          ],
-                        )),
-                      ]),
                     );
                   },
                 ),

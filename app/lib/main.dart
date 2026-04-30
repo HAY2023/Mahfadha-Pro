@@ -17,6 +17,8 @@ import 'screens/setup_wizard.dart';
 import 'screens/update_center.dart';
 import 'screens/vault_screen.dart';
 import 'services/task_manager.dart';
+import 'services/github_updater_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'theme/mars_theme.dart';
 import 'widgets/app_title_bar.dart';
 import 'widgets/auto_lock_wrapper.dart';
@@ -60,11 +62,11 @@ Future<void> main(List<String> args) async {
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle: TitleBarStyle.hidden,
-    title: 'CipherVault Pro',
+    title: 'Mahfadha Pro',
   );
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.setTitle('CipherVault Pro');
+    await windowManager.setTitle('Mahfadha Pro');
     try {
       await windowManager.setIcon(_resolveDesktopAssetPath(_trayIconIcoPath));
     } catch (_) {}
@@ -96,9 +98,44 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   void initState() {
     super.initState();
     _initializeDesktopShell();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final packageInfo = await PackageInfo.fromPlatform();
+      context.read<AppState>().setAppVersion('v${packageInfo.version}');
       TaskManager().initialize(context);
+      _checkForUpdates(packageInfo.version);
     });
+  }
+
+  Future<void> _checkForUpdates(String currentVersion) async {
+    try {
+      final updater = GitHubUpdaterService(owner: 'HAY2023');
+      final latest = await updater.fetchLatestRelease();
+      final latestVer = latest.tagName.replaceAll('v', '');
+      
+      if (latestVer.compareTo(currentVersion) > 0) {
+        if (!mounted) return;
+        CipherVaultApp.scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.new_releases, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'تحديث جديد متاح (${latest.tagName})! تحقق من مركز التحديثات.',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            backgroundColor: MarsTheme.cyanNeon.withOpacity(0.9),
+            duration: const Duration(seconds: 10),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (_) {
+      // Ignore update check errors in background
+    }
   }
 
   Future<void> _initializeDesktopShell() async {
@@ -111,7 +148,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   Future<void> _configureTray() async {
     final menu = Menu(
       items: [
-        MenuItem(key: 'open_app', label: 'فتح CipherVault Pro'),
+        MenuItem(key: 'open_app', label: 'فتح Mahfadha Pro'),
         MenuItem.separator(),
         MenuItem(key: 'quit_app', label: 'إغلاق نهائي'),
       ],
@@ -122,7 +159,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
         Platform.isWindows ? _trayIconIcoPath : _trayIconPngPath,
       ),
     );
-    await trayManager.setToolTip('CipherVault Pro');
+    await trayManager.setToolTip('Mahfadha Pro');
     await trayManager.setContextMenu(menu);
   }
 
@@ -165,7 +202,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: CipherVaultApp.scaffoldMessengerKey,
-      title: 'CipherVault Pro',
+      title: 'Mahfadha Pro',
       theme: MarsTheme.darkTheme,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

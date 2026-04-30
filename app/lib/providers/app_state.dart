@@ -249,7 +249,11 @@ class AppState extends ChangeNotifier {
   // ── كلمات المرور المؤقتة في الذاكرة العشوائية فقط ──
   List<Map<String, dynamic>> _tempPasswords = [];
 
+  String _appVersion = 'v1.0.0';
   String _firmwareVersion = 'غير متوفر';
+
+  // ── [V6] Live Audit Trail ──
+  final List<String> _auditLogs = [];
 
   // ══════════════════════════════════════════════════════════════
   //  [V2/V3] Biometric-Gated Vault State
@@ -301,6 +305,8 @@ class AppState extends ChangeNotifier {
   String get deviceStatus => _deviceStatus;
   String? get connectedPort => _connectedPort;
   String get firmwareVersion => _firmwareVersion;
+  String get appVersion => _appVersion;
+  List<String> get auditLogs => List.unmodifiable(_auditLogs);
   List<Map<String, dynamic>> get tempPasswords =>
       List.unmodifiable(_tempPasswords);
 
@@ -384,6 +390,20 @@ class AppState extends ChangeNotifier {
 
   void setFirmwareVersion(String version) {
     _firmwareVersion = version;
+    notifyListeners();
+  }
+
+  void setAppVersion(String version) {
+    _appVersion = version;
+    notifyListeners();
+  }
+
+  void addAuditLog(String log) {
+    final timestamp = DateTime.now().toIso8601String().substring(11, 19);
+    _auditLogs.add('[$timestamp] $log');
+    if (_auditLogs.length > 100) {
+      _auditLogs.removeAt(0); // Keep last 100 logs
+    }
     notifyListeners();
   }
 
