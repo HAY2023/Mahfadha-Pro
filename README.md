@@ -164,3 +164,144 @@ git push origin v1.0.3
 
 ## ⚠️ تحذير أمني
 لا تفقد رقم التعريف الشخصي أو جهازك المادي. بسبب استخدام ATECC608A Secure Element، **لا يوجد باب خلفي مطلقاً**. إذا دُمّر الجهاز بدون نسخة احتياطية `.mahfadha`، فالبيانات غير قابلة للاسترداد رياضياً.
+
+---
+
+## 🧠 ESP32-S3 Firmware (State Machine) - Omni-Vault
+
+```cpp
+#include <Arduino.h>
+#include <Preferences.h>
+
+Preferences nvs;
+
+// --- ARCHITECTURAL ENUMS ---
+enum DeviceState { STATE_LOCKED, STATE_UNLOCKED_MENU, STATE_ACTION };
+enum ConnectionMode { MODE_USB, MODE_BLE, MODE_WIFI };
+enum UIStyle { STYLE_CLASSIC_LIST, STYLE_MODERN_CAROUSEL };
+
+// --- GLOBAL STATE ---
+DeviceState currentState = STATE_LOCKED;
+ConnectionMode currentMode = MODE_USB;
+UIStyle currentStyle = STYLE_CLASSIC_LIST;
+
+// --- LOCKOUT SECURITY ---
+uint8_t failedAttempts = 0;
+uint32_t lockoutEndTime = 0; // Stored as Epoch time to survive reboot
+bool isLockedOut = false;
+
+// --- HARDWARE INPUTS ---
+#define BTN_UP 4
+#define BTN_DOWN 5
+#define BTN_LEFT 6
+#define BTN_RIGHT 7
+#define BTN_OK 8
+
+void setup() {
+    Serial.begin(115200);
+    nvs.begin("vault_sec", false);
+    
+    // Resume Lockout State if rebooted during penalty
+    lockoutEndTime = nvs.getUInt("lockout_end", 0);
+    failedAttempts = nvs.getUChar("fail_count", 0);
+    
+    uint32_t now = getCurrentEpochTime(); // Requires RTC or NTP sync
+    if (lockoutEndTime > now) {
+        isLockedOut = true;
+    } else {
+        resetSecurityPenalty();
+    }
+    
+    // Init OLED (I2C Pins 25, 26) & Tri-Mode Interfaces
+    // initDisplay();
+    // initUSB_HID();
+    // initBLE_HID();
+    // initWiFi_WebSocket();
+}
+
+void loop() {
+    switch (currentState) {
+        case STATE_LOCKED:
+            handleLockScreen();
+            break;
+        case STATE_UNLOCKED_MENU:
+            handleMainMenu();
+            break;
+        case STATE_ACTION:
+            // executeVaultAction();
+            break;
+    }
+}
+
+// --- SECURE STATE LOGIC ---
+void handleLockScreen() {
+    if (isLockedOut) {
+        uint32_t now = getCurrentEpochTime();
+        if (now >= lockoutEndTime) {
+            resetSecurityPenalty();
+        } else {
+            uint32_t remainingSeconds = lockoutEndTime - now;
+            // renderLockoutCountdown(remainingSeconds); // Renders "Locked: MM:SS"
+            return;
+        }
+    }
+
+    // renderLockScreenAesthetic(); // "Hi, Sir" + Time + Lock Icon
+
+    if (scanFingerprint()) {
+        if (authenticateFinger()) {
+            resetSecurityPenalty();
+            currentState = STATE_UNLOCKED_MENU;
+        } else {
+            failedAttempts++;
+            nvs.putUChar("fail_count", failedAttempts);
+            
+            if (failedAttempts >= 10) {
+                isLockedOut = true;
+                // Enforce STRICT 15-minute lockout (900 seconds)
+                lockoutEndTime = getCurrentEpochTime() + 900; 
+                nvs.putUInt("lockout_end", lockoutEndTime);
+            }
+        }
+    }
+}
+
+// --- DYNAMIC UI RENDERING ENGINE ---
+void handleMainMenu() {
+    // Read 5-Way D-Pad
+    bool up = digitalRead(BTN_UP) == LOW;
+    bool down = digitalRead(BTN_DOWN) == LOW;
+    bool left = digitalRead(BTN_LEFT) == LOW;
+    bool right = digitalRead(BTN_RIGHT) == LOW;
+    bool ok = digitalRead(BTN_OK) == LOW;
+
+    // Render logic based on user preference
+    if (currentStyle == STYLE_CLASSIC_LIST) {
+        // renderVerticalListMenu();
+        // if (up || down) navigateClassicList(up ? -1 : 1);
+    } else if (currentStyle == STYLE_MODERN_CAROUSEL) {
+        // renderHorizontalCarouselMenu();
+        // if (left || right) navigateCarousel(left ? -1 : 1);
+    }
+
+    if (ok) {
+        // executeSelectedMenuItem();
+    }
+}
+
+void resetSecurityPenalty() {
+    isLockedOut = false;
+    failedAttempts = 0;
+    lockoutEndTime = 0;
+    nvs.putUChar("fail_count", 0);
+    nvs.putUInt("lockout_end", 0);
+}
+
+uint32_t getCurrentEpochTime() {
+    // Mock implementation: Fetch from DS3231 RTC or Wi-Fi NTP sync
+    return 0; 
+}
+
+bool scanFingerprint() { return false; }
+bool authenticateFinger() { return false; }
+```

@@ -380,13 +380,23 @@ class _VaultScreenState extends State<VaultScreen>
           child: accounts.isEmpty
               ? Center(child: Text('لا توجد حسابات محفوظة', style: GoogleFonts.cairo(
                   color: MarsTheme.textMuted, fontSize: 14)))
-              : ListView.builder(
+              : GridView.builder(
+                  padding: const EdgeInsets.only(top: 16),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 280,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 1.1,
+                  ),
                   itemCount: accounts.length,
                   itemBuilder: (_, i) => FadeInLeft(
                     duration: const Duration(milliseconds: 1200),
                     delay: Duration(milliseconds: i * 150),
                     from: 200,
-                    child: _buildAccountTile(context, accounts[i]),
+                    child: _GlassmorphicAccountCard(
+                      account: accounts[i],
+                      onTap: () => _showEditDialog(context, accounts[i]),
+                    ),
                   ),
                 ),
         ),
@@ -394,89 +404,7 @@ class _VaultScreenState extends State<VaultScreen>
     );
   }
 
-  Widget _buildAccountTile(BuildContext context, VaultAccount acc) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => _showEditDialog(context, acc),
-        child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: MarsTheme.surface.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MarsTheme.borderGlow),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Account name + badges
-        Row(children: [
-          const Icon(Icons.account_circle, color: MarsTheme.cyanGlow, size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text(acc.name, style: GoogleFonts.cairo(
-            color: MarsTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600,
-          ))),
-          if (acc.hasAutoLogin)
-            _buildBadge('Auto-Login', MarsTheme.success),
-          if (acc.sensitiveDataCount > 0) ...[
-            const SizedBox(width: 6),
-            _buildBadge('${acc.sensitiveDataCount} حساس', MarsTheme.warning),
-          ],
-        ]),
-        const SizedBox(height: 8),
-
-        // Core fields
-        _infoRow('المستخدم', acc.username),
-        _infoRow('كلمة المرور', '••••••••'),
-        if (acc.targetUrl.isNotEmpty) _infoRow('رابط الدخول', acc.targetUrl),
-        if (acc.totpSecret.isNotEmpty) _infoRow('TOTP', '••••••'),
-
-        // [V3] Phone numbers
-        if (acc.phoneNumbers.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          _buildChipRow(
-            icon: Icons.phone_android,
-            color: MarsTheme.success,
-            items: acc.phoneNumbers,
-          ),
-        ],
-
-        // [V3] Backup codes
-        if (acc.backupCodes.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          _buildChipRow(
-            icon: Icons.vpn_key,
-            color: MarsTheme.error,
-            items: acc.backupCodes,
-          ),
-        ],
-
-        // [V3] Recovery emails
-        if (acc.recoveryEmails.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          _buildChipRow(
-            icon: Icons.email_outlined,
-            color: MarsTheme.warning,
-            items: acc.recoveryEmails,
-          ),
-        ],
-
-        // Legacy sensitive entries
-        if (acc.sensitiveEntries.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(spacing: 6, children: acc.sensitiveEntries.map((e) =>
-            Chip(
-              label: Text(e.label, style: GoogleFonts.cairo(fontSize: 10)),
-              backgroundColor: MarsTheme.surfaceLight,
-              side: BorderSide(color: MarsTheme.borderGlow),
-              visualDensity: VisualDensity.compact,
-            ),
-          ).toList()),
-        ],
-      ]),
-    ),
-    ),
-    );
-  }
+  // _buildAccountTile is replaced by _GlassmorphicAccountCard below
 
   void _showEditDialog(BuildContext context, VaultAccount acc) {
     final usernameCtrl = TextEditingController(text: acc.username);
@@ -713,6 +641,119 @@ class _VaultScreenState extends State<VaultScreen>
                 ),
         ),
       ]),
+    );
+  }
+}
+
+class _GlassmorphicAccountCard extends StatefulWidget {
+  final VaultAccount account;
+  final VoidCallback onTap;
+
+  const _GlassmorphicAccountCard({required this.account, required this.onTap});
+
+  @override
+  __GlassmorphicAccountCardState createState() => __GlassmorphicAccountCardState();
+}
+
+class __GlassmorphicAccountCardState extends State<_GlassmorphicAccountCard> {
+  bool isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => isHovered = true),
+      onExit: (_) => setState(() => isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          transform: isHovered ? (Matrix4.identity()..scale(1.03)) : Matrix4.identity(),
+          transformAlignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03), 
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isHovered 
+                  ? const Color(0xFF00FFFF).withOpacity(0.6)
+                  : Colors.white.withOpacity(0.1),
+              width: isHovered ? 1.5 : 1.0,
+            ),
+            boxShadow: isHovered
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF00FFFF).withOpacity(0.15),
+                      blurRadius: 25,
+                      spreadRadius: 2,
+                    )
+                  ]
+                : [],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      radius: 20,
+                      child: const Icon(Icons.language, color: Color(0xFFD4AF37), size: 20),
+                    ),
+                    const Icon(Icons.more_horiz, color: Colors.white38),
+                  ],
+                ),
+                const Spacer(),
+                
+                Text(
+                  widget.account.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.account.username.isNotEmpty ? widget.account.username : 'بدون مستخدم',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Spacer(),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.vpn_key_rounded, size: 20),
+                      color: Colors.white54,
+                      hoverColor: Colors.white,
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.offline_bolt_rounded, size: 20),
+                      color: const Color(0xFF00FFFF),
+                      hoverColor: const Color(0xFF00FFFF).withOpacity(0.7),
+                      onPressed: () {}, 
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
