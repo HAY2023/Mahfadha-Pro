@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_state.dart';
+import '../services/esp32_serial_service.dart';
 import '../theme/mars_theme.dart';
 import 'csv_importer_and_health.dart';
 
@@ -19,14 +17,26 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  SerialPort? _port;
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+  Esp32SerialService? _serialService;
   String _status = 'غير متصل';
   Timer? _telemetryTimer;
+
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
 
   @override
   void initState() {
     super.initState();
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    
+    _glowAnimation = Tween<double>(begin: 0.2, end: 0.8).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
       final portName = appState.connectedPort;
@@ -39,89 +49,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _connectDevice(String portName) {
-    try {
-      if (_port?.isOpen ?? false) {
-        _port!.close();
-      }
-
-      _port = SerialPort(portName);
-      if (_port!.openReadWrite()) {
-        setState(() {
+    _serialService?.dispose();
+    _serialService = Esp32SerialService(portName: portName);
+    
+    _serialService!.onStatus.listen((status) {
+      if (!mounted) return;
+      setState(() {
+        if (status == 'connected') {
           _status = 'متصل عبر $portName — بانتظار المصادقة الحيوية';
-        });
+        } else {
+          _status = status;
+        }
+      });
+    });
 
-        // ── [V5] Start polling telemetry ──
-        _telemetryTimer?.cancel();
-        _telemetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-          _sendCommand({'cmd': 'get_telemetry'});
-        });
-
-        final reader = SerialPortReader(_port!);
-        reader.stream.listen((data) {
-          try {
-            final message = utf8.decode(data).trim();
-            if (message.isEmpty) return;
-
-            // Handle potential multiple JSON objects in one burst
-            final lines = message.split('\n');
-            for (final line in lines) {
-              if (line.isEmpty) continue;
-              final json = jsonDecode(line);
-              final appState = context.read<AppState>();
-              
-              if (json['status'] == 'telemetry') {
-                final dataStr = json['data']?.toString() ?? '';
-                appState.processTelemetry(dataStr);
-                _checkThermalState(appState);
-              } 
-              else if (json['status'] == 'event') {
-                final eventMessage = json['message']?.toString() ?? '';
-
-                switch (eventMessage) {
-                  case 'FINGERPRINT_VERIFIED':
-                    setState(() => _status = 'تمت المصادقة الحيوية بنجاح ✓');
-                    appState.onFingerprintVerified();
-                    break;
-                  case 'BIOMETRIC_UNLOCKED':
-                    setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
-                    appState.onBiometricUnlocked();
-                    break;
-                  case 'FINGERPRINT_SCANNING':
-                    setState(() => _status = 'جارٍ مسح البصمة...');
-                    appState.onBiometricScanning();
-                    break;
-                  case 'FINGERPRINT_FAILED':
-                    setState(() => _status = 'فشل التحقق من البصمة');
-                    appState.onBiometricFailed();
-                    break;
-                  case 'BIOMETRIC_LOCKED':
-                    setState(() => _status = 'وحدة التشفير متصلة وتنتظر التحقق الحيوي');
-                    appState.lockBiometricVault();
-                    break;
-                }
-              }
-            }
-          } catch (_) {}
-        });
-      } else {
-        setState(() => _status = 'تعذر فتح المنفذ $portName');
+    _serialService!.onData.listen((json) {
+      if (!mounted) return;
+      final appState = context.read<AppState>();
+      
+      if (json['status'] == 'telemetry') {
+        final dataStr = json['data']?.toString() ?? '';
+        appState.processTelemetry(dataStr);
+        _checkThermalState(appState);
+      } else if (json['status'] == 'event') {
+        final eventMessage = json['message']?.toString() ?? '';
+        switch (eventMessage) {
+          case 'FINGERPRINT_VERIFIED':
+            setState(() => _status = 'تمت المصادقة الحيوية بنجاح ✓');
+            appState.onFingerprintVerified();
+            break;
+          case 'BIOMETRIC_UNLOCKED':
+            setState(() => _status = 'تمت المصادقة الحيوية بنجاح');
+            appState.onBiometricUnlocked();
+            break;
+          case 'FINGERPRINT_SCANNING':
+            setState(() => _status = 'جارٍ مسح البصمة...');
+            appState.onBiometricScanning();
+            break;
+          case 'FINGERPRINT_FAILED':
+            setState(() => _status = 'فشل التحقق من البصمة');
+            appState.onBiometricFailed();
+            break;
+          case 'BIOMETRIC_LOCKED':
+            setState(() => _status = 'وحدة التشفير متصلة وتنتظر التحقق الحيوي');
+            appState.lockBiometricVault();
+            break;
+        }
       }
-    } catch (error) {
-      setState(() => _status = 'خطأ اتصال: $error');
-    }
+    });
+
+    _serialService!.connect();
+
+    _telemetryTimer?.cancel();
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _serialService?.sendCommand({'cmd': 'get_telemetry'});
+    });
   }
 
   void _checkThermalState(AppState state) {
     if (state.isThermalEmergency) {
       _telemetryTimer?.cancel();
       _showThermalAlert();
-      _sendCommand({'cmd': 'SHUTDOWN'});
+      _serialService?.sendCommand({'cmd': 'SHUTDOWN'});
       
-      // Disconnect and route to ConnectionGate
       Future.delayed(const Duration(seconds: 4), () {
-        if (_port?.isOpen ?? false) {
-          _port!.close();
-        }
+        _serialService?.dispose();
         state.fullReset();
         Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
       });
@@ -146,11 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: MarsTheme.error, width: 2),
                 boxShadow: [
-                  BoxShadow(
-                    color: MarsTheme.error.withOpacity(0.3),
-                    blurRadius: 100,
-                    spreadRadius: 10,
-                  ),
+                  BoxShadow(color: MarsTheme.error.withOpacity(0.3), blurRadius: 100, spreadRadius: 10),
                 ],
               ),
               child: Material(
@@ -184,18 +172,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _sendCommand(Map<String, dynamic> command) {
-    if (_port == null || !_port!.isOpen) {
-      return;
-    }
-    try {
-      final payload = '${jsonEncode(command)}\n';
-      _port!.write(Uint8List.fromList(utf8.encode(payload)));
-    } catch (error) {
-      setState(() => _status = 'تعذر إرسال الأمر: $error');
-    }
-  }
-
   void _openCsvImporter() {
     showDialog(
       context: context,
@@ -225,176 +201,100 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(40),
-        child: SingleChildScrollView(
-          child: Container(
-            width: 520,
-            padding: const EdgeInsets.all(28),
-            decoration: MarsTheme.glassCard(borderRadius: 24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              // ── Header ──
-              Row(children: [
-                const Icon(Icons.person_add_alt_1, color: MarsTheme.success, size: 24),
-                const SizedBox(width: 10),
-                Text('إضافة حساب جديد', style: GoogleFonts.cairo(
-                  color: MarsTheme.cyanNeon, fontSize: 20, fontWeight: FontWeight.w700,
-                )),
-              ]),
-              const SizedBox(height: 20),
-
-              // ── Core fields ──
-              _inputField(nameCtrl, 'اسم الحساب', Icons.label),
-              const SizedBox(height: 12),
-              _inputField(userCtrl, 'اسم المستخدم', Icons.person),
-              const SizedBox(height: 12),
-              _inputField(passCtrl, 'كلمة المرور', Icons.lock, obscure: true),
-              const SizedBox(height: 16),
-
-              // ── Auto-Login URL (Rubber Ducky) ──
-              _buildSectionLabel(
-                'الدخول التلقائي (Rubber Ducky)',
-                Icons.keyboard_rounded,
-                MarsTheme.success,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: SingleChildScrollView(
+              child: Container(
+                width: 520,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0x990A0E14), Color(0xCC0D1117)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF00FFFF).withOpacity(0.1), blurRadius: 40),
+                  ],
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Row(children: [
+                    const Icon(Icons.person_add_alt_1, color: Color(0xFFD4AF37), size: 24),
+                    const SizedBox(width: 10),
+                    Text('إضافة حساب جديد', style: GoogleFonts.cairo(
+                      color: const Color(0xFF00FFFF), fontSize: 20, fontWeight: FontWeight.w700,
+                    )),
+                  ]),
+                  const SizedBox(height: 20),
+                  _inputField(nameCtrl, 'اسم الحساب', Icons.label),
+                  const SizedBox(height: 12),
+                  _inputField(userCtrl, 'اسم المستخدم', Icons.person),
+                  const SizedBox(height: 12),
+                  _inputField(passCtrl, 'كلمة المرور', Icons.lock, obscure: true),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Expanded(child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white24),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('إلغاء'),
+                    )),
+                    const SizedBox(width: 12),
+                    Expanded(child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD4AF37),
+                        foregroundColor: Colors.black,
+                      ),
+                      icon: const Icon(Icons.security, size: 18),
+                      label: const Text('تشفير وحفظ'),
+                      onPressed: () {
+                        _serialService?.sendCommand({
+                          'cmd': 'add_account',
+                          'name': nameCtrl.text,
+                          'username': userCtrl.text,
+                          'password': passCtrl.text,
+                        });
+                        Navigator.pop(ctx);
+                      },
+                    )),
+                  ]),
+                ]),
               ),
-              const SizedBox(height: 8),
-              _inputField(urlCtrl, 'رابط الدخول التلقائي (URL)', Icons.link,
-                hint: 'https://facebook.com/login'),
-              const SizedBox(height: 6),
-              _buildInfoBanner(
-                icon: Icons.keyboard,
-                color: MarsTheme.success,
-                text: 'الرابط سيُرسل إلى الجهاز ليقوم بفتحه تلقائياً عبر '
-                    'Keystroke Injection (Rubber Ducky) ثم يكتب بيانات الدخول.',
-              ),
-              const SizedBox(height: 16),
-
-              // ── Sensitive data section ──
-              _buildSectionLabel(
-                'بيانات حساسة (اختياري)',
-                Icons.shield_outlined,
-                MarsTheme.warning,
-              ),
-              const SizedBox(height: 8),
-              _inputField(phoneCtrl, 'جهات الاتصال الآمنة (فاصل: ,)', Icons.phone_android,
-                hint: '+213xxxxxxxxx, +1xxxxxxxxxx'),
-              const SizedBox(height: 10),
-              _inputField(backupCtrl, 'أكواد احتياطية (فاصل: ,)', Icons.vpn_key,
-                hint: 'XXXX-XXXX, YYYY-YYYY'),
-              const SizedBox(height: 6),
-              _buildInfoBanner(
-                icon: Icons.security,
-                color: MarsTheme.warning,
-                text: 'هذه البيانات تُشفَّر وتُخزَّن حصرياً على وحدة التشفير المادية. لن تظهر '
-                    'في التطبيق إلا بعد المصادقة الحيوية.',
-              ),
-              const SizedBox(height: 20),
-
-              // ── Action buttons ──
-              Row(children: [
-                Expanded(child: OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('إلغاء'),
-                )),
-                const SizedBox(width: 12),
-                Expanded(child: ElevatedButton.icon(
-                  icon: const Icon(Icons.send, size: 18),
-                  label: const Text('تشفير وإرسال'),
-                  onPressed: () {
-                    final phones = _parseCommaSeparated(phoneCtrl.text);
-                    final codes = _parseCommaSeparated(backupCtrl.text);
-
-                    _sendCommand({
-                      'cmd': 'add_account',
-                      'name': nameCtrl.text,
-                      'username': userCtrl.text,
-                      'password': passCtrl.text,
-                      'targetUrl': urlCtrl.text,
-                      'phoneNumbers': phones,
-                      'backupCodes': codes,
-                    });
-                    Navigator.pop(ctx);
-                  },
-                )),
-              ]),
-            ]),
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<String> _parseCommaSeparated(String input) {
-    if (input.trim().isEmpty) return [];
-    return input
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-  }
-
-  Widget _buildSectionLabel(String text, IconData icon, Color color) {
-    return Row(children: [
-      Icon(icon, color: color, size: 16),
-      const SizedBox(width: 8),
-      Text(text, style: GoogleFonts.cairo(
-        color: color, fontSize: 13, fontWeight: FontWeight.w700,
-      )),
-      const Spacer(),
-      Container(
-        height: 1,
-        width: 80,
-        color: color.withOpacity(0.15),
-      ),
-    ]);
-  }
-
-  Widget _buildInfoBanner({
-    required IconData icon,
-    required Color color,
-    required String text,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.15)),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 8),
-        Expanded(child: Text(
-          text,
-          style: GoogleFonts.cairo(color: color, fontSize: 10, height: 1.6),
-        )),
-      ]),
-    );
-  }
-
-  Widget _inputField(TextEditingController ctrl, String label, IconData icon,
-      {bool obscure = false, String? hint}) {
+  Widget _inputField(TextEditingController ctrl, String label, IconData icon, {bool obscure = false}) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
-      style: GoogleFonts.firaCode(color: MarsTheme.textPrimary, fontSize: 13),
+      style: GoogleFonts.firaCode(color: Colors.white, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
-        hintText: hint,
-        labelStyle: GoogleFonts.cairo(color: MarsTheme.textMuted, fontSize: 13),
-        hintStyle: GoogleFonts.firaCode(color: MarsTheme.textMuted.withOpacity(0.5), fontSize: 11),
-        prefixIcon: Icon(icon, color: MarsTheme.cyanDim, size: 18),
+        labelStyle: GoogleFonts.cairo(color: Colors.white54, fontSize: 13),
+        prefixIcon: Icon(icon, color: const Color(0xFF00FFFF), size: 18),
         filled: true,
-        fillColor: MarsTheme.surface,
+        fillColor: Colors.white.withOpacity(0.05),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: MarsTheme.borderGlow),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: MarsTheme.borderGlow),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: MarsTheme.cyanNeon, width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
         ),
       ),
     );
@@ -403,9 +303,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _telemetryTimer?.cancel();
-    if (_port?.isOpen ?? false) {
-      _port!.close();
-    }
+    _serialService?.dispose();
+    _glowController.dispose();
     super.dispose();
   }
 
@@ -414,44 +313,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final connected = _status.contains('متصل') || _status.contains('المصادقة');
 
     return Container(
-      decoration: const BoxDecoration(color: Colors.transparent),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+        image: DecorationImage(
+          image: AssetImage('assets/tray/bg_pattern.png'), // Subtle background texture if available
+          fit: BoxFit.cover,
+          opacity: 0.05,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
         child: Column(
           children: [
-            _buildHeader(connected),
-            const SizedBox(height: 16),
+            _buildFuturisticHeader(connected),
+            const SizedBox(height: 24),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // ── [V5] Telemetry Monitor ──
                     Consumer<AppState>(
                       builder: (context, state, _) {
-                        return _buildPerformanceMonitor(state);
+                        return _buildGlassmorphicMonitor(state);
                       },
                     ),
-                    const SizedBox(height: 12),
-                    // ── Operations Grid ──
-                    Container(
-                      decoration: MarsTheme.glassCard(borderRadius: 24),
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('عمليات وحدة التشفير المادية', style: GoogleFonts.cairo(
-                            color: MarsTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w700,
-                          )),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            height: 220,
-                            child: _buildOperationsGrid(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const PasswordHealthDashboard(),
+                    const SizedBox(height: 24),
+                    _buildGlassmorphicOperations(),
                   ],
                 ),
               ),
@@ -462,255 +348,236 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPerformanceMonitor(AppState state) {
-    return Container(
-      decoration: MarsTheme.glassCard(borderRadius: 20),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+  Widget _buildFuturisticHeader(bool connected) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF00FFFF).withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF00FFFF).withOpacity(0.05), blurRadius: 20),
+            ],
+          ),
+          child: Row(
             children: [
-              const Icon(Icons.speed_rounded, color: MarsTheme.cyanNeon, size: 20),
-              const SizedBox(width: 8),
-              Text('حالة وحدة التشفير', style: GoogleFonts.cairo(
-                color: MarsTheme.cyanNeon, fontSize: 16, fontWeight: FontWeight.bold,
+              AnimatedBuilder(
+                animation: _glowAnimation,
+                builder: (context, child) {
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00FFFF).withOpacity(_glowAnimation.value),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.security, color: Color(0xFF00FFFF), size: 24),
+                  );
+                },
+              ),
+              const SizedBox(width: 16),
+              Text('CIPHER VAULT PRO', style: GoogleFonts.orbitron(
+                color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2,
               )),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildGauge(
-                label: 'درجة الحرارة',
-                value: state.temperature,
-                maxValue: 80.0,
-                unit: '°C',
-                icon: Icons.thermostat_rounded,
-                isTemperature: true,
-              ),
-              _buildGauge(
-                label: 'المساحة المتوفرة',
-                value: 100.0 - state.storageUsed,
-                maxValue: 100.0,
-                unit: '%',
-                icon: Icons.storage_rounded,
-                color: MarsTheme.cyanNeon,
-              ),
-              _buildGauge(
-                label: 'استقرار النظام',
-                value: state.systemLoad,
-                maxValue: 100.0,
-                unit: '%',
-                icon: Icons.memory_rounded,
-                color: MarsTheme.accent,
-                invertColor: true, // Lower is better
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: (connected ? const Color(0xFF34D399) : MarsTheme.error).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: (connected ? const Color(0xFF34D399) : MarsTheme.error).withOpacity(0.5),
+                  ),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.fiber_manual_record, size: 10,
+                    color: connected ? const Color(0xFF34D399) : MarsTheme.error),
+                  const SizedBox(width: 8),
+                  Text(_status, style: GoogleFonts.cairo(
+                    color: connected ? const Color(0xFF34D399) : MarsTheme.error,
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                  )),
+                ]),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildGauge({
-    required String label,
-    required double value,
-    required double maxValue,
-    required String unit,
-    required IconData icon,
-    Color? color,
-    bool isTemperature = false,
-    bool invertColor = false,
-  }) {
-    Color gaugeColor = color ?? MarsTheme.success;
-    
-    if (isTemperature) {
-      if (value < 40) gaugeColor = MarsTheme.success;
-      else if (value < 55) gaugeColor = MarsTheme.warning;
-      else gaugeColor = MarsTheme.error;
-    } else if (invertColor) {
-      if (value > 80) gaugeColor = MarsTheme.error;
-      else if (value > 60) gaugeColor = MarsTheme.warning;
-      else gaugeColor = MarsTheme.success;
-    }
+  Widget _buildGlassmorphicMonitor(AppState state) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0x2A152033), Color(0x1A0D1117)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.2), width: 1),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.analytics_outlined, color: Color(0xFFD4AF37), size: 22),
+                  const SizedBox(width: 10),
+                  Text('نظام المراقبة الحيوي', style: GoogleFonts.cairo(
+                    color: const Color(0xFFD4AF37), fontSize: 18, fontWeight: FontWeight.bold,
+                  )),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNeonGauge('الحرارة', state.temperature, 80.0, '°C', Icons.thermostat, const Color(0xFF00FFFF)),
+                  _buildNeonGauge('المساحة', 100.0 - state.storageUsed, 100.0, '%', Icons.storage, const Color(0xFFD4AF37)),
+                  _buildNeonGauge('الاستقرار', state.systemLoad, 100.0, '%', Icons.memory, const Color(0xFFB57EDC), invert: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-    final double percentage = (value / maxValue).clamp(0.0, 1.0);
+  Widget _buildNeonGauge(String label, double value, double maxValue, String unit, IconData icon, Color neonColor, {bool invert = false}) {
+    Color gaugeColor = neonColor;
+    if (invert && value > 80) gaugeColor = MarsTheme.error;
+    
+    final percentage = (value / maxValue).clamp(0.0, 1.0);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Stack(
           alignment: Alignment.center,
           children: [
-            SizedBox(
-              width: 70,
-              height: 70,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: gaugeColor.withOpacity(0.2), blurRadius: 20, spreadRadius: 5),
+                ],
+              ),
               child: CircularProgressIndicator(
                 value: percentage,
-                strokeWidth: 6,
+                strokeWidth: 8,
                 backgroundColor: gaugeColor.withOpacity(0.1),
                 color: gaugeColor,
+                strokeCap: StrokeCap.round,
               ),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: gaugeColor, size: 16),
-                const SizedBox(height: 2),
-                Text(
-                  '${value.toStringAsFixed(1)}$unit',
-                  style: GoogleFonts.firaCode(
-                    color: MarsTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Icon(icon, color: Colors.white, size: 20),
+                Text('${value.toStringAsFixed(1)}$unit', style: GoogleFonts.firaCode(
+                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold,
+                )),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          label,
-          style: GoogleFonts.cairo(
-            color: MarsTheme.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader(bool connected) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: MarsTheme.surfaceLight.withOpacity(0.75),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: MarsTheme.borderGlow),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.memory_rounded, color: MarsTheme.cyanNeon, size: 18),
-            const SizedBox(width: 8),
-            Text('CipherVault Pro', style: GoogleFonts.inter(
-              color: MarsTheme.cyanNeon, fontSize: 13, fontWeight: FontWeight.w700,
-            )),
-          ]),
-        ),
-        const SizedBox(width: 12),
-        Text('لوحة التحكم', style: GoogleFonts.cairo(
-          color: MarsTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700,
+        const SizedBox(height: 12),
+        Text(label, style: GoogleFonts.cairo(
+          color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600,
         )),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: (connected ? MarsTheme.success : MarsTheme.error).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: (connected ? MarsTheme.success : MarsTheme.error).withOpacity(0.3),
-            ),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.circle, size: 8,
-              color: connected ? MarsTheme.success : MarsTheme.error),
-            const SizedBox(width: 8),
-            Text(_status, style: GoogleFonts.cairo(
-              color: connected ? MarsTheme.success : MarsTheme.error,
-              fontSize: 11.5, fontWeight: FontWeight.w600,
-            )),
-          ]),
-        ),
       ],
     );
   }
 
-  Widget _buildOperationsGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 980 ? 4 : 3;
-        return GridView.count(
-          crossAxisCount: columns,
-          childAspectRatio: 1.45,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          children: [
-            _operationCard(
-              icon: Icons.sync_rounded, label: 'مزامنة الوقت', color: MarsTheme.cyan,
-              onTap: () => _sendCommand({
-                'cmd': 'sync_time',
-                'time': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-              }),
-            ),
-            _operationCard(
-              icon: Icons.person_add_alt_1_rounded, label: 'إضافة حساب',
-              color: MarsTheme.success,
-              onTap: _showAddAccountDialog,
-            ),
-            _operationCard(
-              icon: Icons.shield_rounded, label: 'خزنة صفرية المعرفة',
-              color: const Color(0xFFE879F9),
-              onTap: () => context.read<AppState>().setCurrentPage(SidebarPage.accounts),
-            ),
-            _operationCard(
-              icon: Icons.list_alt_rounded, label: 'سجل الحسابات',
-              color: MarsTheme.accent,
-              onTap: () => _sendCommand({'cmd': 'list_accounts'}),
-            ),
-            _operationCard(
-              icon: Icons.upload_file_rounded, label: 'استيراد السجلات',
-              color: MarsTheme.warning, onTap: _openCsvImporter,
-            ),
-            _operationCard(
-              icon: Icons.download_done_rounded, label: 'نسخة احتياطية مشفرة',
-              color: const Color(0xFF2DD4BF),
-              onTap: () => _sendCommand({'cmd': 'export_backup'}),
-            ),
-            _operationCard(
-              icon: Icons.refresh_rounded, label: 'تحديث النظام',
-              color: MarsTheme.cyanGlow,
-              onTap: () => context.read<AppState>().setCurrentPage(SidebarPage.updates),
-            ),
-            _operationCard(
-              icon: Icons.delete_sweep_rounded, label: 'إعادة ضبط المصنع',
-              color: MarsTheme.error,
-              onTap: () => _sendCommand({'cmd': 'factory_reset'}),
-            ),
-          ],
-        );
-      },
+  Widget _buildGlassmorphicOperations() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.02),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF00FFFF).withOpacity(0.15)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('العمليات المركزية', style: GoogleFonts.cairo(
+                color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold,
+              )),
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: constraints.maxWidth >= 800 ? 4 : 3,
+                    childAspectRatio: 1.5,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    children: [
+                      _buildNeonButton('مزامنة الوقت', Icons.sync, const Color(0xFF00FFFF), () => _serialService?.sendCommand({
+                        'cmd': 'sync_time', 'time': DateTime.now().millisecondsSinceEpoch ~/ 1000
+                      })),
+                      _buildNeonButton('إضافة حساب', Icons.person_add, const Color(0xFF34D399), _showAddAccountDialog),
+                      _buildNeonButton('الخزنة', Icons.shield, const Color(0xFFD4AF37), () => context.read<AppState>().setCurrentPage(SidebarPage.accounts)),
+                      _buildNeonButton('استيراد', Icons.upload_file, const Color(0xFFB57EDC), _openCsvImporter),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _operationCard({
-    required IconData icon, required String label,
-    required Color color, required VoidCallback onTap,
-  }) {
+  Widget _buildNeonButton(String label, IconData icon, Color color, VoidCallback onTap) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16), onTap: onTap,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
+          color: color.withOpacity(0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.18)),
+          border: Border.all(color: color.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.1), blurRadius: 15),
+          ],
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(label, textAlign: TextAlign.center,
-              style: GoogleFonts.cairo(
-                color: MarsTheme.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600,
-              )),
-          ),
-        ]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 12),
+            Text(label, style: GoogleFonts.cairo(
+              color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600,
+            )),
+          ],
+        ),
       ),
     );
   }
