@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+
 import '../theme/mars_theme.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
