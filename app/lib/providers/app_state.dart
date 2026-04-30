@@ -249,6 +249,8 @@ class AppState extends ChangeNotifier {
   // ── كلمات المرور المؤقتة في الذاكرة العشوائية فقط ──
   List<Map<String, dynamic>> _tempPasswords = [];
 
+  String _firmwareVersion = 'غير متوفر';
+
   // ══════════════════════════════════════════════════════════════
   //  [V2/V3] Biometric-Gated Vault State
   // ══════════════════════════════════════════════════════════════
@@ -298,6 +300,7 @@ class AppState extends ChangeNotifier {
   bool get isSetupComplete => _isSetupComplete;
   String get deviceStatus => _deviceStatus;
   String? get connectedPort => _connectedPort;
+  String get firmwareVersion => _firmwareVersion;
   List<Map<String, dynamic>> get tempPasswords =>
       List.unmodifiable(_tempPasswords);
 
@@ -376,6 +379,11 @@ class AppState extends ChangeNotifier {
 
   void updateStatus(String status) {
     _deviceStatus = status;
+    notifyListeners();
+  }
+
+  void setFirmwareVersion(String version) {
+    _firmwareVersion = version;
     notifyListeners();
   }
 

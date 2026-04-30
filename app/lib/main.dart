@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart' hide MenuItem;
@@ -17,7 +16,7 @@ import 'screens/settings_screen.dart';
 import 'screens/setup_wizard.dart';
 import 'screens/update_center.dart';
 import 'screens/vault_screen.dart';
-import 'services/websocket_server_service.dart';
+import 'services/task_manager.dart';
 import 'theme/mars_theme.dart';
 import 'widgets/app_title_bar.dart';
 import 'widgets/auto_lock_wrapper.dart';
@@ -42,15 +41,6 @@ String _resolveDesktopAssetPath(String relativePath) {
   return bundledCandidate;
 }
 
-Future<void> _restorePrimaryWindow() async {
-  await windowManager.setSkipTaskbar(false);
-  if (await windowManager.isMinimized()) {
-    await windowManager.restore();
-  }
-  await windowManager.show();
-  await windowManager.focus();
-}
-
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
@@ -59,7 +49,7 @@ Future<void> main(List<String> args) async {
     args,
     'mahfadha_pro_windows_desktop',
     onSecondWindow: (_) async {
-      await _restorePrimaryWindow();
+      await TaskManager().restorePrimaryWindow();
     },
   );
 
@@ -77,9 +67,7 @@ Future<void> main(List<String> args) async {
     await windowManager.setTitle('CipherVault Pro');
     try {
       await windowManager.setIcon(_resolveDesktopAssetPath(_trayIconIcoPath));
-    } catch (_) {
-      // Icon may not exist in dev mode — ignore
-    }
+    } catch (_) {}
     await windowManager.setSkipTaskbar(false);
     await windowManager.show();
     await windowManager.focus();
@@ -103,16 +91,14 @@ class CipherVaultApp extends StatefulWidget {
 
 class _CipherVaultAppState extends State<CipherVaultApp>
     with WindowListener, TrayListener {
-  bool _isQuitting = false;
-
-  // ══ [V6] WebSocket Server — replaces old TCP socket listener ══
-  final WebSocketServerService _wsServer = WebSocketServerService();
 
   @override
   void initState() {
     super.initState();
     _initializeDesktopShell();
-    _startWebSocketServer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      TaskManager().initialize(context);
+    });
   }
 
   Future<void> _initializeDesktopShell() async {
@@ -140,58 +126,14 @@ class _CipherVaultAppState extends State<CipherVaultApp>
     await trayManager.setContextMenu(menu);
   }
 
-  // ══════════════════════════════════════════════════════════════
-  //  [V6] WebSocket Server — Real Auto-Save Interceptor
-  //  Listens on ws://localhost:2050 for JSON credential payloads
-  //  from the Chrome Extension via WebSocket bridge.
-  //  Runs continuously even when the app is in the system tray.
-  // ══════════════════════════════════════════════════════════════
-
-  Future<void> _startWebSocketServer() async {
-    _wsServer.onCredentialIntercepted = (url, username, password) {
-      if (!mounted) return;
-
-      final credential = InterceptedCredential(
-        targetUrl: url,
-        username: username,
-        password: password,
-        interceptedAt: DateTime.now(),
-      );
-
-      final appState = Provider.of<AppState>(context, listen: false);
-      appState.setPendingCredential(credential);
-
-      // Restore window so the user sees the dialog
-      _restorePrimaryWindow();
-
-      debugPrint('[\uD83D\uDD0C WebSocket] Credential intercepted for: $url');
-    };
-
-    await _wsServer.start();
-  }
-
-  Future<void> _hideToBackground() async {
-    await windowManager.setSkipTaskbar(true);
-    await windowManager.hide();
-  }
-
-  Future<void> _quitApplication() async {
-    if (_isQuitting) return;
-    _isQuitting = true;
-    await _wsServer.stop();
-    await trayManager.destroy();
-    await windowManager.destroy();
-  }
-
   @override
   void onWindowClose() async {
-    if (_isQuitting) return;
-    await _hideToBackground();
+    await TaskManager().hideToSystemTray();
   }
 
   @override
   void onTrayIconMouseDown() async {
-    await _restorePrimaryWindow();
+    await TaskManager().restorePrimaryWindow();
   }
 
   @override
@@ -203,10 +145,10 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'open_app':
-        await _restorePrimaryWindow();
+        await TaskManager().restorePrimaryWindow();
         break;
       case 'quit_app':
-        await _quitApplication();
+        await TaskManager().quitApplication();
         break;
     }
   }
@@ -215,7 +157,6 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   void dispose() {
     trayManager.removeListener(this);
     windowManager.removeListener(this);
-    _wsServer.stop();
     super.dispose();
   }
 
@@ -251,9 +192,6 @@ class _CipherVaultAppState extends State<CipherVaultApp>
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  _AppShell — Simple shell for non-dashboard routes (connection gate, etc.)
-// ══════════════════════════════════════════════════════════════════════════
 class _AppShell extends StatelessWidget {
   final Widget child;
 
@@ -271,7 +209,6 @@ class _AppShell extends StatelessWidget {
               Expanded(child: child),
             ],
           ),
-          // ── Auto-Save Dialog Overlay ──
           const _AutoSaveOverlay(),
         ],
       ),
@@ -279,9 +216,6 @@ class _AppShell extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  _DashboardShell — Main app with sidebar + liquid background + content
-// ══════════════════════════════════════════════════════════════════════════
 class _DashboardShell extends StatelessWidget {
   const _DashboardShell();
 
@@ -293,20 +227,14 @@ class _DashboardShell extends StatelessWidget {
         children: [
           Column(
             children: [
-              // ── Title bar at absolute top ──
               const AppTitleBar(),
-
-              // ── Main content area: Sidebar + Content ──
               Expanded(
                 child: LiquidBackground(
                   child: Directionality(
                     textDirection: TextDirection.rtl,
                     child: Row(
                       children: [
-                        // ── Sidebar ──
                         const AppSidebar(),
-
-                        // ── Content area ──
                         Expanded(
                           child: AutoLockWrapper(
                             timeout: const Duration(seconds: 180),
@@ -329,7 +257,6 @@ class _DashboardShell extends StatelessWidget {
               ),
             ],
           ),
-          // ── Auto-Save Dialog Overlay ──
           const _AutoSaveOverlay(),
         ],
       ),
@@ -352,10 +279,6 @@ class _DashboardShell extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  _AutoSaveOverlay — Watches for pending credentials and shows dialog
-//  Overlays on top of all content including from system tray popup.
-// ══════════════════════════════════════════════════════════════════════════
 class _AutoSaveOverlay extends StatelessWidget {
   const _AutoSaveOverlay();
 
@@ -366,14 +289,12 @@ class _AutoSaveOverlay extends StatelessWidget {
         final credential = state.pendingCredential;
         if (credential == null) return const SizedBox.shrink();
 
-        // Show dialog as soon as credential is available
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (state.pendingCredential != null) {
             AutoSaveDialog.show(
               context,
               credential: credential,
               onSave: () {
-                // Send to ESP32 for encryption and NVS storage
                 final newAccount = VaultAccount(
                   id: state.vaultAccounts.length,
                   name: _extractDomain(credential.targetUrl),
@@ -392,14 +313,10 @@ class _AutoSaveOverlay extends StatelessWidget {
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
-
-                debugPrint(
-                    '[🔌 Auto-Save] Credential saved for: ${credential.targetUrl}');
               },
               onDismiss: () {
                 state.clearPendingCredential();
                 Navigator.of(context, rootNavigator: true).pop();
-                debugPrint('[🔌 Auto-Save] Credential dismissed.');
               },
             );
           }

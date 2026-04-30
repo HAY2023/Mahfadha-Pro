@@ -17,7 +17,7 @@ class AppSidebar extends StatelessWidget {
     _SidebarItem(
       page: SidebarPage.home,
       icon: Icons.dashboard_rounded,
-      label: 'لوحة التحكم',
+      label: 'نظرة عامة',
     ),
     _SidebarItem(
       page: SidebarPage.accounts,

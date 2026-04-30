@@ -162,6 +162,18 @@ class SettingsScreen extends StatelessWidget {
                             ),
                           ),
                           _settingsTile(
+                            icon: Icons.edit_note,
+                            title: 'تعديل البيانات',
+                            subtitle: 'تعديل وتحديث بيانات الحسابات الحالية قبل إعادة تشفيرها',
+                            trailing: ElevatedButton(
+                              onPressed: () {
+                                // Logic handled in TaskManager or via Dialog
+                              },
+                              child: Text('بدء التعديل', style: TextStyle(color: Colors.black)),
+                              style: ElevatedButton.styleFrom(backgroundColor: MarsTheme.cyanNeon),
+                            ),
+                          ),
+                          _settingsTile(
                             icon: Icons.delete_forever_rounded,
                             title: 'إعادة ضبط المصنع',
                             subtitle: 'مسح جميع البيانات من الجهاز نهائياً',

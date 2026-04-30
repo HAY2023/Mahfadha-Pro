@@ -4,13 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 
-/// Highly optimized service for two-way serial communication with ESP32.
-/// Features:
-/// - Asynchronous stream-based reading (non-blocking).
-/// - Automatic parsing of JSON bursts.
-/// - Robust error handling and auto-reconnection logic.
-/// - Isolated processing of heavy JSON payloads if necessary.
-class Esp32SerialService {
+class HardwareService {
   SerialPort? _port;
   SerialPortReader? _reader;
   StreamSubscription<Uint8List>? _subscription;
@@ -27,9 +21,8 @@ class Esp32SerialService {
   bool _isReconnecting = false;
   Timer? _reconnectTimer;
 
-  Esp32SerialService({required this.portName, this.baudRate = 115200});
+  HardwareService({required this.portName, this.baudRate = 115200});
 
-  /// Starts the connection and begins listening to the port.
   void connect() {
     if (_port != null && _port!.isOpen) return;
 
@@ -60,7 +53,6 @@ class Esp32SerialService {
     }
   }
 
-  /// Sends a JSON command to the ESP32.
   void sendCommand(Map<String, dynamic> command) {
     if (_port == null || !_port!.isOpen) return;
     try {
@@ -72,14 +64,11 @@ class Esp32SerialService {
     }
   }
 
-  /// Handles incoming data asynchronously to keep UI responsive.
   void _handleData(Uint8List data) async {
     try {
       final message = utf8.decode(data).trim();
       if (message.isEmpty) return;
 
-      // Heavy JSON parsing is moved to compute (Isolate) to avoid UI freezing
-      // on massive telemetry payloads.
       final parsedList = await compute(_parseJsonBursts, message);
       for (final json in parsedList) {
         _dataController.add(json);
@@ -89,13 +78,19 @@ class Esp32SerialService {
     }
   }
 
-  /// Isolate function to parse multiple newline-separated JSON objects
   static List<Map<String, dynamic>> _parseJsonBursts(String payload) {
     final results = <Map<String, dynamic>>[];
     final lines = payload.split('\n');
     for (final line in lines) {
       final tLine = line.trim();
       if (tLine.isEmpty) continue;
+      
+      // ESP32 might send raw string "FW:1.0.0" instead of JSON for version request. Handle it:
+      if (tLine.startsWith('FW:')) {
+         results.add({'FW': tLine.substring(3)});
+         continue;
+      }
+      
       try {
         results.add(jsonDecode(tLine));
       } catch (_) {}
@@ -128,9 +123,7 @@ class Esp32SerialService {
     _subscription?.cancel();
     _reader?.close();
     if (_port != null && _port!.isOpen) {
-      try {
-        _port!.close();
-      } catch (_) {}
+      try { _port!.close(); } catch (_) {}
     }
     _port?.dispose();
     _port = null;

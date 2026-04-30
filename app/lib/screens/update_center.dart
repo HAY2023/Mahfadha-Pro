@@ -17,7 +17,7 @@ class UpdateCenterScreen extends StatefulWidget {
 
 class _UpdateCenterScreenState extends State<UpdateCenterScreen>
     with SingleTickerProviderStateMixin {
-  static const String _currentDesktopVersion = '1.0.3';
+  static const String _currentDesktopVersion = 'v1.0.0';
 
   final GitHubUpdaterService _updater = GitHubUpdaterService(owner: 'HAY2023');
 
@@ -341,7 +341,7 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen>
         ]),
         const SizedBox(height: 24),
         Row(children: [
-          Expanded(child: _infoTile(Icons.local_offer_rounded, 'الإصدار الحالي', _currentDesktopVersion)),
+          Expanded(child: _infoTile(Icons.local_offer_rounded, 'إصدار التطبيق', _currentDesktopVersion)),
           const SizedBox(width: 12),
           Expanded(child: _infoTile(Icons.new_releases_rounded, 'الإصدار المتاح', _releaseInfo?.tagName ?? '-', highlight: _releaseInfo != null)),
           const SizedBox(width: 12),
@@ -397,9 +397,9 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen>
         Row(children: [
           Expanded(child: _infoTile(Icons.developer_board_rounded, 'الجهاز', 'ESP32-S3')),
           const SizedBox(width: 12),
-          Expanded(child: _infoTile(Icons.security_rounded, 'التشفير', 'ATECC608A')),
+          Expanded(child: _infoTile(Icons.memory, 'إصدار وحدة التشفير', context.watch<AppState>().firmwareVersion)),
           const SizedBox(width: 12),
-          Expanded(child: _infoTile(Icons.fingerprint, 'البصمة', 'GROW R503')),
+          Expanded(child: _infoTile(Icons.security_rounded, 'التشفير', 'ATECC608A')),
         ]),
         const SizedBox(height: 16),
         _statusPanel(c, ic, _fwTitle, _fwStatusMessage, _fwStatus),
