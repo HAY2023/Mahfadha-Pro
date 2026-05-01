@@ -37,10 +37,10 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
 
 flutter_icons:
-  image_path: "../../assets/marketing/ciphervault_app_icon.png"
+  image_path: "../assets/marketing/ciphervault_app_icon.png"
   windows:
     generate: true
-    image_path: "../../assets/marketing/ciphervault_app_icon.png"
+    image_path: "../assets/marketing/ciphervault_app_icon.png"
     icon_size: 48
 
 flutter:

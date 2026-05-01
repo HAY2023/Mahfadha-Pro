@@ -605,25 +605,36 @@ class _VaultScreenState extends State<VaultScreen>
   }
 
   Widget _buildEditField(String label, TextEditingController ctrl, IconData icon, {bool obscure = false}) {
-    return TextField(
-      controller: ctrl,
-      obscureText: obscure,
-      style: GoogleFonts.firaCode(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.cairo(color: MarsTheme.textMuted),
-        prefixIcon: Icon(icon, color: MarsTheme.cyanNeon.withOpacity(0.7), size: 18),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: MarsTheme.borderGlow),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: MarsTheme.cyanNeon),
-        ),
-        filled: true,
-        fillColor: Colors.black.withOpacity(0.3),
-      ),
+    bool isPassword = obscure;
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return TextField(
+          controller: ctrl,
+          obscureText: obscure,
+          style: GoogleFonts.firaCode(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: GoogleFonts.cairo(color: MarsTheme.textMuted),
+            prefixIcon: Icon(icon, color: MarsTheme.cyanNeon.withOpacity(0.7), size: 18),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: MarsTheme.textMuted, size: 18),
+                    onPressed: () => setState(() => obscure = !obscure),
+                  )
+                : null,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: MarsTheme.borderGlow),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: MarsTheme.cyanNeon),
+            ),
+            filled: true,
+            fillColor: Colors.black.withOpacity(0.3),
+          ),
+        );
+      }
     );
   }
 

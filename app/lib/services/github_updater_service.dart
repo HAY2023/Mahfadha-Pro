@@ -253,10 +253,10 @@ class GitHubUpdaterService {
     final path = file.path.toLowerCase();
 
     if (path.endsWith('.exe')) {
-      // Launch installer detached then exit the app so it can be replaced
-      await Process.start(file.path, [], mode: ProcessStartMode.detached);
-      // Give the installer a moment to start, then exit
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Launch installer detached using cmd to ensure it outlives the app process
+      await Process.start('cmd', ['/c', 'start', '', file.path], mode: ProcessStartMode.detached);
+      // Give the installer ample time to start and request UAC before exiting
+      await Future.delayed(const Duration(seconds: 3));
       exit(0);
     } else if (path.endsWith('.zip')) {
       final dir = file.parent.path;
