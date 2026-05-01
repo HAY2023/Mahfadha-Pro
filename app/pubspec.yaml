@@ -34,6 +34,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  image_path: "../../assets/marketing/ciphervault_app_icon.png"
+  windows:
+    generate: true
+    image_path: "../../assets/marketing/ciphervault_app_icon.png"
+    icon_size: 48
 
 flutter:
   uses-material-design: true
