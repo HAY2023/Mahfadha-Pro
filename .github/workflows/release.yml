@@ -50,6 +50,7 @@ jobs:
         run: |
           cd app
           flutter pub get
+          flutter pub run flutter_launcher_icons
           flutter build windows --release
 
       - name: Download VC++ Redistributable

@@ -9,6 +9,7 @@ import 'package:animate_do/animate_do.dart';
 import '../services/security_vault_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  Biometric-Gated Vault Screen [V3]
@@ -166,6 +167,13 @@ class _VaultScreenState extends State<VaultScreen>
                 style: GoogleFonts.cairo(
                   color: MarsTheme.textSecondary, fontSize: 13, height: 1.8,
                 ),
+              ),
+              const SizedBox(height: 20),
+              
+              TextButton.icon(
+                onPressed: () => _showPinDialog(context, state),
+                icon: const Icon(Icons.dialpad, color: MarsTheme.cyanNeon),
+                label: Text('فتح باستخدام رمز PIN', style: GoogleFonts.cairo(color: MarsTheme.cyanNeon, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 20),
 
@@ -343,6 +351,97 @@ class _VaultScreenState extends State<VaultScreen>
         return 'ضع إصبعك على مستشعر البصمة في وحدة التشفير المادية.\n'
             'لن يتم فك تشفير أو عرض أي بيانات حتى تتم المصادقة.';
     }
+  }
+
+  void _showPinDialog(BuildContext context, AppState state) {
+    String enteredPin = '';
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                child: Container(
+                  width: 350,
+                  padding: const EdgeInsets.all(24),
+                  decoration: MarsTheme.gateGlassCard(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.dialpad, color: MarsTheme.cyanNeon, size: 40),
+                      const SizedBox(height: 16),
+                      Text('أدخل رمز PIN', style: GoogleFonts.cairo(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(6, (i) {
+                          final filled = i < enteredPin.length;
+                          return Container(
+                            width: 16, height: 16,
+                            margin: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: filled ? MarsTheme.cyanNeon : Colors.transparent,
+                              border: Border.all(color: filled ? MarsTheme.cyanNeon : Colors.white38),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 32),
+                      Wrap(
+                        spacing: 16, runSpacing: 16,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          for (var row in [['1','2','3'], ['4','5','6'], ['7','8','9'], ['','0','⌫']])
+                            ...row.map((key) {
+                              if (key.isEmpty) return const SizedBox(width: 60, height: 60);
+                              return InkWell(
+                                onTap: () async {
+                                  if (key == '⌫') {
+                                    if (enteredPin.isNotEmpty) setState(() => enteredPin = enteredPin.substring(0, enteredPin.length - 1));
+                                  } else if (enteredPin.length < 6) {
+                                    setState(() => enteredPin += key);
+                                    if (enteredPin.length == 6) {
+                                      final prefs = await SharedPreferences.getInstance();
+                                      final savedPin = prefs.getString('app_pin') ?? '';
+                                      if (enteredPin == savedPin) {
+                                        await SecurityVaultService().initialize(enteredPin);
+                                        if (!context.mounted) return;
+                                        Navigator.pop(ctx);
+                                        state.onFingerprintVerified(); 
+                                      } else {
+                                        setState(() => enteredPin = '');
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('رمز PIN غير صحيح', style: GoogleFonts.cairo()), backgroundColor: MarsTheme.error));
+                                      }
+                                    }
+                                  }
+                                },
+                                child: Container(
+                                  width: 60, height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.05),
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(key, style: GoogleFonts.inter(color: Colors.white, fontSize: 24)),
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      }
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════

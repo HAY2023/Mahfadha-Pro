@@ -305,3 +305,112 @@ uint32_t getCurrentEpochTime() {
 bool scanFingerprint() { return false; }
 bool authenticateFinger() { return false; }
 ```
+
+---
+
+## 🧠 Arduino Nano Firmware (Basic Security)
+
+نسخة مبسطة من نظام التحكم مخصصة للعمل على `Arduino Nano`. تعتمد على الـ `EEPROM` الداخلي للحماية وتدعم المستشعرات الأساسية:
+
+```cpp
+#include <Arduino.h>
+#include <EEPROM.h>
+
+// --- ARCHITECTURAL ENUMS ---
+enum DeviceState { STATE_LOCKED, STATE_UNLOCKED_MENU };
+
+// --- GLOBAL STATE ---
+DeviceState currentState = STATE_LOCKED;
+
+// --- LOCKOUT SECURITY ---
+uint8_t failedAttempts = 0;
+bool isLockedOut = false;
+unsigned long lockoutStartTime = 0;
+const unsigned long LOCKOUT_DURATION = 900000; // 15 دقيقة (بالملي ثانية)
+
+// --- HARDWARE INPUTS ---
+#define BTN_UP 4
+#define BTN_DOWN 5
+#define BTN_OK 6
+
+void setup() {
+    Serial.begin(9600);
+    
+    // استرجاع حالة الأمان من EEPROM (العنوان 0)
+    failedAttempts = EEPROM.read(0);
+    if (failedAttempts == 255) { // قيمة افتراضية للـ EEPROM الفارغ
+        failedAttempts = 0;
+        EEPROM.write(0, 0);
+    }
+    
+    // تفعيل الحظر إذا تجاوزت المحاولات الفاشلة الحد المسموح
+    if (failedAttempts >= 5) {
+        isLockedOut = true;
+        lockoutStartTime = millis();
+    }
+    
+    pinMode(BTN_UP, INPUT_PULLUP);
+    pinMode(BTN_DOWN, INPUT_PULLUP);
+    pinMode(BTN_OK, INPUT_PULLUP);
+}
+
+void loop() {
+    switch (currentState) {
+        case STATE_LOCKED:
+            handleLockScreen();
+            break;
+        case STATE_UNLOCKED_MENU:
+            handleMainMenu();
+            break;
+    }
+}
+
+// --- SECURE STATE LOGIC ---
+void handleLockScreen() {
+    if (isLockedOut) {
+        if (millis() - lockoutStartTime >= LOCKOUT_DURATION) {
+            resetSecurityPenalty();
+        } else {
+            // جاري فترة الحظر، لا تسمح بأي محاولة
+            return;
+        }
+    }
+
+    if (scanFingerprint()) {
+        if (authenticateFinger()) {
+            resetSecurityPenalty();
+            currentState = STATE_UNLOCKED_MENU;
+        } else {
+            failedAttempts++;
+            EEPROM.write(0, failedAttempts);
+            
+            if (failedAttempts >= 5) {
+                isLockedOut = true;
+                lockoutStartTime = millis();
+            }
+        }
+    }
+}
+
+// --- MENU LOGIC ---
+void handleMainMenu() {
+    bool up = digitalRead(BTN_UP) == LOW;
+    bool down = digitalRead(BTN_DOWN) == LOW;
+    bool ok = digitalRead(BTN_OK) == LOW;
+
+    // معالجة التنقل في القائمة
+    if (ok) {
+        // تنفيذ الإجراء المطلوب (مثل إرسال كلمة المرور عبر Serial)
+    }
+}
+
+void resetSecurityPenalty() {
+    isLockedOut = false;
+    failedAttempts = 0;
+    EEPROM.write(0, 0);
+}
+
+// توابع فارغة يجب ملؤها بمكتبة حساس البصمة (مثلاً Adafruit_Fingerprint)
+bool scanFingerprint() { return false; }
+bool authenticateFinger() { return false; }
+```
