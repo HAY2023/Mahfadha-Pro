@@ -85,9 +85,13 @@ class HardwareService {
       final tLine = line.trim();
       if (tLine.isEmpty) continue;
       
-      // ESP32 might send raw string "FW:1.0.0" instead of JSON for version request. Handle it:
       if (tLine.startsWith('FW:')) {
          results.add({'FW': tLine.substring(3)});
+         continue;
+      }
+      
+      if (tLine.startsWith('INJECT:')) {
+         results.add({'INJECT': tLine.substring(7)});
          continue;
       }
       

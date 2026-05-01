@@ -62,7 +62,7 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
-                color: MarsTheme.spaceNavy,
+                color: Colors.transparent,
                 border: Border(
                   bottom: BorderSide(
                     color: MarsTheme.cyanNeon.withOpacity(0.08),

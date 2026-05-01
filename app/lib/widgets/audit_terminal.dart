@@ -36,7 +36,7 @@ class _AuditTerminalState extends State<AuditTerminal> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.white.withOpacity(0.03), // Glassmorphism Fix
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: MarsTheme.cyanNeon.withOpacity(0.3)),
               boxShadow: [

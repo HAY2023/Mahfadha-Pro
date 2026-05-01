@@ -12,6 +12,7 @@ import 'providers/app_state.dart';
 import 'screens/connection_gate.dart';
 import 'screens/dashboard.dart';
 import 'screens/phone_vault_screen.dart';
+import 'screens/pin_gate.dart';
 import 'screens/settings_screen.dart';
 import 'screens/setup_wizard.dart';
 import 'screens/update_center.dart';
@@ -216,6 +217,7 @@ class _CipherVaultAppState extends State<CipherVaultApp>
       initialRoute: '/',
       routes: {
         '/': (context) => const _AppShell(child: ConnectionGateScreen()),
+        '/pin_gate': (context) => const _AppShell(child: PinGateScreen()),
         '/dashboard': (context) => const _DashboardShell(),
         '/setup': (context) => const _AppShell(child: SetupWizard()),
         '/vault': (context) => const _AppShell(

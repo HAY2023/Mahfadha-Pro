@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/mars_theme.dart';
 import '../providers/app_state.dart';
 
@@ -97,6 +98,9 @@ class _SetupWizardState extends State<SetupWizard> with TickerProviderStateMixin
     }
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_pin', _pin);
+
     context.read<AppState>().markSetupComplete();
     Navigator.pushReplacementNamed(context, '/dashboard');
   }

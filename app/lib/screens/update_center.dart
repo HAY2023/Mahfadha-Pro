@@ -69,6 +69,34 @@ class _UpdateCenterScreenState extends State<UpdateCenterScreen>
     try {
       final releaseInfo = await _updater.fetchLatestRelease();
       if (!mounted) return;
+
+      final currentVersion = Provider.of<AppState>(context, listen: false).appVersion.replaceAll('v', '');
+      final releaseVer = releaseInfo.tagName.replaceAll('v', '');
+
+      if (releaseVer.compareTo(currentVersion) <= 0) {
+        setState(() {
+          _isChecking = false;
+          _lastCheckedAt = DateTime.now();
+          _appStatus = _UpdateStatus.upToDate;
+          _appStatusMessage = 'أنت تستخدم أحدث إصدار.\nلا توجد تحديثات جديدة.';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                const Text('You are already running the latest version.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: MarsTheme.success.withOpacity(0.9),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        );
+        return;
+      }
+
       setState(() {
         _isChecking = false;
         _releaseInfo = releaseInfo;

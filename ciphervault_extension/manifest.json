@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "CipherVault Pro AutoFill",
+  "version": "1.0",
+  "description": "Zero-Click Autofill Bridge for CipherVault Pro Desktop.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "CipherVault Pro Connected"
+  }
+}

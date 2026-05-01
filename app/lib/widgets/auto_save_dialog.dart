@@ -186,7 +186,7 @@ class AutoSaveDialog extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: MarsTheme.surface.withOpacity(0.6),
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: MarsTheme.borderGlow),
       ),

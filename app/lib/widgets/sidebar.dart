@@ -48,7 +48,7 @@ class AppSidebar extends StatelessWidget {
         return Container(
           width: 220,
           decoration: BoxDecoration(
-            color: MarsTheme.deepSpace.withOpacity(0.6),
+            color: Colors.white.withOpacity(0.05),
             border: Border(
               left: BorderSide(
                 color: MarsTheme.cyanNeon.withOpacity(0.06),

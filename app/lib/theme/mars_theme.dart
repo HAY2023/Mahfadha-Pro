@@ -10,8 +10,8 @@ class MarsTheme {
   static const Color spaceNavy = Color(0xFF0A0E14);
   static const Color background = spaceNavy;
   static const Color deepSpace = Color(0xFF0D1117);
-  static const Color surface = Color(0xFF111725);
-  static const Color surfaceLight = Color(0xFF182133);
+  static const Color surface = Color(0x0DFFFFFF); // Colors.white.withOpacity(0.05)
+  static const Color surfaceLight = Colors.transparent;
   static const Color cardGlass = Color(0x2A152033);
 
   // ── ألوان النيون ──────────────────────────────────────────────────

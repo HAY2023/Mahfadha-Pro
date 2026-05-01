@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import '../providers/app_state.dart';
 import 'hardware_service.dart';
 import 'websocket_server_service.dart';
+import 'websocket_vault_service.dart';
 
 /// Centralizes all business logic and system interactions.
 class TaskManager {
@@ -18,6 +19,7 @@ class TaskManager {
 
   HardwareService? _hardwareService;
   final WebSocketServerService _wsServer = WebSocketServerService();
+  final WebsocketVaultService _vaultWsServer = WebsocketVaultService();
   Timer? _telemetryTimer;
 
   bool _isQuitting = false;
@@ -37,6 +39,7 @@ class TaskManager {
       restorePrimaryWindow();
     };
     await _wsServer.start();
+    await _vaultWsServer.start();
     
     // Watch for device connection
     appState.addListener(() {
@@ -93,6 +96,18 @@ class TaskManager {
       } else if (json.containsKey('FW')) {
         // e.g. FW:1.0.0
         appState.setFirmwareVersion(json['FW'].toString());
+      } else if (json.containsKey('INJECT')) {
+        final accountName = json['INJECT'].toString();
+        // Search for account in appState
+        try {
+          final account = appState.vaultAccounts.firstWhere(
+            (acc) => acc.name.toLowerCase() == accountName.toLowerCase()
+          );
+          _vaultWsServer.sendCredentialsToBrowser(account.username, account.password);
+          appState.addAuditLog('Injected credentials for: $accountName');
+        } catch (_) {
+          appState.addAuditLog('Inject failed: Account "$accountName" not found in vault.');
+        }
       }
     });
 
@@ -140,6 +155,7 @@ class TaskManager {
     _telemetryTimer?.cancel();
     _hardwareService?.dispose();
     await _wsServer.stop();
+    await _vaultWsServer.stop();
     await trayManager.destroy();
     await windowManager.destroy();
     exit(0);

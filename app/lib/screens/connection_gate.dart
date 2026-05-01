@@ -181,7 +181,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
 
         Future.delayed(const Duration(milliseconds: 1200), () {
           if (mounted) {
-            Navigator.pushReplacementNamed(context, '/dashboard');
+            Navigator.pushReplacementNamed(context, '/pin_gate');
           }
         });
         return;
@@ -240,7 +240,7 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
     appState.markSetupComplete();
 
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/dashboard');
+    Navigator.pushReplacementNamed(context, '/pin_gate');
   }
 
   void _closePort() {
@@ -259,12 +259,12 @@ class _ConnectionGateScreenState extends State<ConnectionGateScreen>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0A0E14), // Deep Space Navy
+      color: Colors.transparent, // Glassmorphism Fix
       child: Stack(
         fit: StackFit.expand,
         children: [
           // ── Layer 0: Solid deep space background ──
-          Container(color: const Color(0xFF0A0E14)),
+          Container(color: Colors.transparent),
 
           // ── Layer 1: Animated Cyan Neon glowing orb ──
           _buildNeonOrbBackground(),
