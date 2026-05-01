@@ -690,12 +690,12 @@ class __GlassmorphicAccountCardState extends State<_GlassmorphicAccountCard> {
           transform: isHovered ? (Matrix4.identity()..scale(1.03)) : Matrix4.identity(),
           transformAlignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03), 
+            color: Colors.black.withOpacity(0.4), 
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: isHovered 
                   ? const Color(0xFF00FFFF).withOpacity(0.6)
-                  : Colors.white.withOpacity(0.1),
+                  : Colors.white.withOpacity(0.05),
               width: isHovered ? 1.5 : 1.0,
             ),
             boxShadow: isHovered

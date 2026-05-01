@@ -9,10 +9,10 @@ class MarsTheme {
   // ── الألوان الأساسية ──────────────────────────────────────────────
   static const Color spaceNavy = Color(0xFF0A0E14);
   static const Color background = spaceNavy;
-  static const Color deepSpace = Color(0xFF0D1117);
-  static const Color surface = Color(0x0DFFFFFF); // Colors.white.withOpacity(0.05)
+  static const Color deepSpace = Color(0xFF05070A);
+  static const Color surface = Color(0x33000000); // Unified transparent black
   static const Color surfaceLight = Colors.transparent;
-  static const Color cardGlass = Color(0x2A152033);
+  static const Color cardGlass = Color(0x66000000); // Transparent black for all cards
 
   // ── ألوان النيون ──────────────────────────────────────────────────
   static const Color cyanNeon = Color(0xFF00FFFF);
@@ -46,7 +46,7 @@ class MarsTheme {
   );
 
   static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFF090D13), Color(0xFF0D1522), Color(0xFF090D13)],
+    colors: [Color(0xFF05070A), Color(0xFF020305), Color(0xFF05070A)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -59,19 +59,14 @@ class MarsTheme {
   // ── تزيين البطاقة الزجاجية ─────────────────────────────────────────
   static BoxDecoration glassCard({double borderRadius = 20}) {
     return BoxDecoration(
-      gradient: cardGradient,
+      color: Colors.black.withOpacity(0.4), // Unified black transparent
       borderRadius: BorderRadius.circular(borderRadius),
-      border: Border.all(color: borderGlow, width: 1),
+      border: Border.all(color: Colors.white.withOpacity(0.05), width: 1),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withOpacity(0.5),
           blurRadius: 24,
           offset: const Offset(0, 8),
-        ),
-        BoxShadow(
-          color: cyanNeon.withOpacity(0.04),
-          blurRadius: 40,
-          spreadRadius: -4,
         ),
       ],
     );
@@ -80,9 +75,9 @@ class MarsTheme {
   // ── تزيين بوابة الاتصال الزجاجية ──────────────────────────────────
   static BoxDecoration gateGlassCard({double borderRadius = 24}) {
     return BoxDecoration(
-      color: Colors.white.withOpacity(0.05),
+      color: Colors.black.withOpacity(0.4), // Unified black transparent
       borderRadius: BorderRadius.circular(borderRadius),
-      border: Border.all(color: Colors.white.withOpacity(0.1)),
+      border: Border.all(color: Colors.white.withOpacity(0.05)),
       boxShadow: [
         BoxShadow(
           color: cyanNeon.withOpacity(0.06),
