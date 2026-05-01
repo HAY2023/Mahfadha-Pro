@@ -1,5 +1,5 @@
 #define MyAppName "Mahfadha Pro"
-#define MyAppVersion "1.0.12"
+#define MyAppVersion "3.1.3"
 #define MyAppPublisher "HAY2023"
 #define MyAppURL "https://github.com/HAY2023/Mahfadha-Pro"
 #define MyAppExeName "MahfadhaPro.exe"
