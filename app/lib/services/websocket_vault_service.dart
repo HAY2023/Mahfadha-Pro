@@ -48,7 +48,7 @@ class WebsocketVaultService {
     }
   }
 
-  void sendCredentialsToBrowser(String username, String password) {
+  void sendCredentialsToBrowser(String username, String password, {String? totp}) {
     if (_browserSocket == null) {
       debugPrint('[Autofill WS] Cannot send credentials: No browser connected.');
       return;
@@ -58,6 +58,7 @@ class WebsocketVaultService {
       'action': 'inject',
       'username': username,
       'password': password,
+      if (totp != null) 'totp': totp,
     });
 
     _browserSocket!.add(payload);

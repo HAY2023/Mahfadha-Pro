@@ -1,8 +1,33 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "fill_credentials") {
     fillCredentials(request.username, request.password);
+    if (request.totp) {
+      // Save TOTP for 2 minutes (120000 ms) in case the next page asks for it
+      chrome.storage.local.set({ 
+        ciphervault_totp: request.totp, 
+        ciphervault_totp_expiry: Date.now() + 120000 
+      });
+    }
   }
 });
+
+// Auto-run on page load to check if there is a pending TOTP
+chrome.storage.local.get(['ciphervault_totp', 'ciphervault_totp_expiry'], (result) => {
+  if (result.ciphervault_totp && result.ciphervault_totp_expiry && Date.now() < result.ciphervault_totp_expiry) {
+    injectTotpIfPossible(result.ciphervault_totp);
+  }
+});
+
+function injectTotpIfPossible(totpCode) {
+  // Look for common 2FA/TOTP input fields
+  const totpInput = document.querySelector('input[name*="totp"], input[name*="code"], input[name*="auth"], input[name*="2fa"], input[id*="totp"], input[id*="code"], input[id*="auth"], input[id*="2fa"]');
+  if (totpInput && totpInput.type !== "hidden") {
+    simulateInput(totpInput, totpCode);
+    console.log("CipherVault Pro: TOTP injected automatically.");
+    // Clear it so we don't inject again randomly
+    chrome.storage.local.remove(['ciphervault_totp', 'ciphervault_totp_expiry']);
+  }
+}
 
 function fillCredentials(username, password) {
   // Find the password field

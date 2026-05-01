@@ -21,7 +21,7 @@ function connectWebSocket() {
     try {
       const data = JSON.parse(event.data);
       if (data.action === "inject" && data.username && data.password) {
-        injectCredentials(data.username, data.password);
+        injectCredentials(data.username, data.password, data.totp);
       }
     } catch (e) {
       console.error("Failed to parse message from CipherVault Pro:", e);
@@ -45,7 +45,7 @@ function scheduleReconnect() {
   }
 }
 
-function injectCredentials(username, password) {
+function injectCredentials(username, password, totp) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs.length === 0) return;
     const activeTab = tabs[0];
@@ -54,11 +54,11 @@ function injectCredentials(username, password) {
       target: { tabId: activeTab.id },
       files: ["content.js"]
     }, () => {
-      // After script is injected, send a message to it with the credentials
       chrome.tabs.sendMessage(activeTab.id, {
         action: "fill_credentials",
         username: username,
-        password: password
+        password: password,
+        totp: totp
       });
     });
   });

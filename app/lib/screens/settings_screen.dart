@@ -4,6 +4,7 @@ import 'package:animate_do/animate_do.dart';
 
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import '../services/security_vault_service.dart';
 
 import '../theme/mars_theme.dart';
 
@@ -169,11 +170,22 @@ class SettingsScreen extends StatelessWidget {
                             title: 'تعديل البيانات',
                             subtitle: 'تعديل وتحديث بيانات الحسابات الحالية قبل إعادة تشفيرها',
                             trailing: ElevatedButton(
-                              onPressed: () {
-                                // Logic handled in TaskManager or via Dialog
-                              },
+                              onPressed: () {},
                               child: Text('بدء التعديل', style: TextStyle(color: Colors.black)),
                               style: ElevatedButton.styleFrom(backgroundColor: MarsTheme.cyanNeon),
+                            ),
+                          ),
+                          _settingsTile(
+                            icon: Icons.warning_rounded,
+                            title: 'رمز التدمير الذاتي (Panic PIN)',
+                            subtitle: 'إعداد رمز وهمي لمسح كل البيانات عند الإكراه',
+                            trailing: ElevatedButton(
+                              onPressed: () async {
+                                await SecurityVaultService().setPanicPin('000000');
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تعيين رمز التدمير الذاتي إلى 000000')));
+                              },
+                              child: Text('تفعيل الرمز (000000)', style: TextStyle(color: Colors.black)),
+                              style: ElevatedButton.styleFrom(backgroundColor: MarsTheme.error),
                             ),
                           ),
                           _settingsTile(

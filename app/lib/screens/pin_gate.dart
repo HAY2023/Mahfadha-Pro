@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../theme/mars_theme.dart';
+import '../services/security_vault_service.dart';
+import '../services/audio_service.dart';
+import '../providers/app_state.dart';
 
 class PinGateScreen extends StatefulWidget {
   const PinGateScreen({super.key});
@@ -70,8 +74,22 @@ class _PinGateScreenState extends State<PinGateScreen> {
           Navigator.pushReplacementNamed(context, '/dashboard');
         } else {
           if (_enteredPin == _savedPin) {
+            await SecurityVaultService().initialize(_enteredPin);
+            if (!mounted) return;
+            Navigator.pushReplacementNamed(context, '/dashboard');
+          } else if (SecurityVaultService().isPanicPin(_enteredPin)) {
+            await SecurityVaultService().triggerSelfDestruct();
+            if (!mounted) return;
+            context.read<AppState>().addAuditLog('🚨 PANIC PIN ENTERED: ALL DATA WIPED');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('🚨 وضع التدمير الذاتي مُفعل. تم مسح كل البيانات.'),
+                backgroundColor: MarsTheme.error,
+              ),
+            );
             Navigator.pushReplacementNamed(context, '/dashboard');
           } else {
+            AudioService().playErrorSound();
             setState(() {
               _enteredPin = '';
             });

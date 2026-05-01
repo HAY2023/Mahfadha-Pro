@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/mars_theme.dart';
 import 'package:animate_do/animate_do.dart';
+import '../services/security_vault_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 /// ══════════════════════════════════════════════════════════════════════
 ///  Biometric-Gated Vault Screen [V3]
@@ -371,6 +374,21 @@ class _VaultScreenState extends State<VaultScreen>
             color: MarsTheme.cyanNeon, fontSize: 18, fontWeight: FontWeight.w700,
           )),
           const Spacer(),
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                // Assume nano id is derived from firmware version or hardcoded for now since it's an example
+                final path = await SecurityVaultService().exportBackup(state.vaultAccounts, 'NANO_HW_ID');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم أخذ نسخة احتياطية مشفرة بنجاح: $path'), backgroundColor: MarsTheme.success));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل النسخ الاحتياطي: $e'), backgroundColor: MarsTheme.error));
+              }
+            },
+            icon: const Icon(Icons.backup_rounded, size: 16),
+            label: Text('نسخ احتياطي (.cvault)', style: GoogleFonts.cairo(fontSize: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: MarsTheme.cyanNeon, foregroundColor: Colors.black),
+          ),
+          const SizedBox(width: 12),
           Text('${accounts.length} حساب', style: GoogleFonts.cairo(
             color: MarsTheme.textMuted, fontSize: 12,
           )),

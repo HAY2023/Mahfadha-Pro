@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:otp/otp.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,8 @@ import 'package:window_manager/window_manager.dart';
 import '../providers/app_state.dart';
 import 'hardware_service.dart';
 import 'websocket_server_service.dart';
+import 'websocket_vault_service.dart';
+import 'audio_service.dart';
 import 'websocket_vault_service.dart';
 
 /// Centralizes all business logic and system interactions.
@@ -57,6 +60,7 @@ class TaskManager {
     _hardwareService!.onStatus.listen((status) {
       if (status == 'connected') {
         appState.updateStatus('متصل عبر $portName — بانتظار المصادقة الحيوية');
+        AudioService().playConnectSound();
         // Request Firmware version
         _hardwareService!.sendCommand({'cmd': 'GET_VER'});
       } else {
@@ -103,7 +107,14 @@ class TaskManager {
           final account = appState.vaultAccounts.firstWhere(
             (acc) => acc.name.toLowerCase() == accountName.toLowerCase()
           );
-          _vaultWsServer.sendCredentialsToBrowser(account.username, account.password);
+          String? totpCode;
+          if (account.totpSecret.isNotEmpty) {
+            try {
+              totpCode = OTP.generateTOTPCodeString(account.totpSecret, DateTime.now().millisecondsSinceEpoch, algorithm: Algorithm.SHA1, isGoogle: true);
+            } catch (_) {}
+          }
+          _vaultWsServer.sendCredentialsToBrowser(account.username, account.password, totp: totpCode);
+          AudioService().playInjectSound();
           appState.addAuditLog('Injected credentials for: $accountName');
         } catch (_) {
           appState.addAuditLog('Inject failed: Account "$accountName" not found in vault.');
